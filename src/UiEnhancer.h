@@ -1,5 +1,9 @@
 #pragma once
 #include <QObject>
+#include <QString>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 
 class MainWindow;
 class QDockWidget;

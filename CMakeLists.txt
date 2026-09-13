@@ -7,7 +7,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 6.7 REQUIRED COMPONENTS Core Gui Widgets Pdf)
+find_package(Qt6 6.7 REQUIRED COMPONENTS Core Gui Widgets Pdf Network)
 
 qt_add_executable(AstraPDF WIN32
     src/main.cpp
@@ -17,7 +17,7 @@ qt_add_executable(AstraPDF WIN32
     src/CosInspector.h src/CosInspector.cpp
 )
 
-target_link_libraries(AstraPDF PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Pdf)
+target_link_libraries(AstraPDF PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Pdf Qt6::Network)
 
 if(MSVC)
     target_compile_options(AstraPDF PRIVATE /W4 /permissive- /EHsc)

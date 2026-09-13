@@ -2,6 +2,7 @@
 #include <QCoreApplication>
 #include "MainWindow.h"
 #include "ReaderSessionController.h"
+#include "UiEnhancer.h"
 
 int main(int argc, char *argv[])
 {
@@ -12,6 +13,7 @@ int main(int argc, char *argv[])
 
     MainWindow w;
     ReaderSessionController sessions(&w,&w);
+    UiEnhancer enhancer(&w,&w);
     w.show();
 
     if(argc>1)

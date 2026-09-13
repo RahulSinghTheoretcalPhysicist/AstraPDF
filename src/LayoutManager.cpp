@@ -28,7 +28,7 @@ LayoutResult LayoutManager::calculate(const QVector<QSizeF>& pageSizes,
     };
 
     if (mode == ViewMode::SinglePage) {
-        currentPage = std::clamp(currentPage, 0, pageSizes.size() - 1);
+        currentPage = std::clamp(currentPage, 0, static_cast<int>(pageSizes.size()) - 1);
         qreal y = margin; addSingle(currentPage, y);
         out.canvasSize.setWidth(std::max(viewportWidth, out.canvasSize.width()));
         return out;
@@ -70,7 +70,7 @@ LayoutResult LayoutManager::calculate(const QVector<QSizeF>& pageSizes,
     };
 
     if (mode == ViewMode::FacingPages) {
-        currentPage = std::clamp(currentPage, 0, pageSizes.size() - 1);
+        currentPage = std::clamp(currentPage, 0, static_cast<int>(pageSizes.size()) - 1);
         int left = currentPage;
         if (left % 2 == 1) --left;
         qreal y = margin; addPair(left, left+1, y);

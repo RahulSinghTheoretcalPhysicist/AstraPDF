@@ -59,7 +59,7 @@ private:
     QImage renderedPage(int page, QSize pixelSize);
 
     QPdfDocument *m_document=nullptr;
-    ViewMode m_mode=ViewMode::Continuous;
+    ViewMode m_mode=ViewMode::SinglePage;
     int m_currentPage=0;
     qreal m_zoom=1.0;
     qreal m_viewportWidth=1000.0;

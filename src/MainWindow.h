@@ -13,6 +13,7 @@ protected:
 private:
     void buildUi(); void buildActions(); void buildToolbar();
     void applyModeFromCombo(); void updatePageUi(int page); void updateZoomUi(); void inspectCos();
+    void finishOpenPdf();
 
     QPdfDocument *m_document=nullptr;
     QScrollArea *m_scrollArea=nullptr;

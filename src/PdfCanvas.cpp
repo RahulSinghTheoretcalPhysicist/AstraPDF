@@ -54,8 +54,27 @@ QVector<QSizeF> PdfCanvas::pageSizes() const
 {
     QVector<QSizeF> s;
     if(!m_document)return s;
-    s.reserve(m_document->pageCount());
-    for(int i=0;i<m_document->pageCount();++i)s.push_back(m_document->pagePointSize(i));
+
+    const int count=m_document->pageCount();
+    if(count<=0)return s;
+
+    const QSizeF fallback(612.0,792.0);
+    s.fill(fallback,count);
+
+    if(m_mode==ViewMode::SinglePage){
+        s[m_currentPage]=m_document->pagePointSize(m_currentPage);
+        return s;
+    }
+
+    if(m_mode==ViewMode::FacingPages){
+        int left=m_currentPage;
+        if(left%2==1)--left;
+        s[left]=m_document->pagePointSize(left);
+        if(left+1<count)s[left+1]=m_document->pagePointSize(left+1);
+        return s;
+    }
+
+    for(int i=0;i<count;++i)s[i]=m_document->pagePointSize(i);
     return s;
 }
 

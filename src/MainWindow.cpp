@@ -2,7 +2,6 @@
 #include "PdfCanvas.h"
 #include "CosInspector.h"
 #include <QAction>
-#include <QCheckBox>
 #include <QColor>
 #include <QComboBox>
 #include <QDialog>
@@ -12,12 +11,18 @@
 #include <QFrame>
 #include <QHash>
 #include <QHBoxLayout>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QKeySequence>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
 #include <QPdfDocument>
 #include <QPushButton>
 #include <QRegularExpression>
@@ -32,6 +37,7 @@
 #include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
+#include <QUrl>
 #include <QVBoxLayout>
 #include <algorithm>
 
@@ -92,7 +98,8 @@ QString definitionFor(const QString& key)
 }
 
 MainWindow::MainWindow(QWidget *parent):QMainWindow(parent),
-    m_document(new QPdfDocument(this)),m_scrollArea(new QScrollArea(this)),m_canvas(new PdfCanvas)
+    m_document(new QPdfDocument(this)),m_scrollArea(new QScrollArea(this)),m_canvas(new PdfCanvas),
+    m_network(new QNetworkAccessManager(this))
 {
     buildUi();
     buildActions();
@@ -176,10 +183,6 @@ void MainWindow::applyTheme()
         QDockWidget::title { background:#191e25; border:1px solid %1; padding:7px 10px; text-align:left; }
         QDockWidget QWidget { background:#151a20; color:#edf1f5; }
         QTextBrowser { background:#0f1318; color:#dce3ec; border:1px solid %1; border-radius:8px; padding:8px; }
-        QCheckBox { color:#dce3ec; spacing:7px; }
-        QCheckBox::indicator { width:18px; height:18px; }
-        QCheckBox::indicator:checked { background:%1; border:2px solid %1; border-radius:4px; }
-        QCheckBox::indicator:unchecked { background:#11151a; border:2px solid #596473; border-radius:4px; }
     )").arg(a,a2));
 }
 
@@ -291,7 +294,7 @@ void MainWindow::buildToolbar()
 
 void MainWindow::buildDictionaryDock()
 {
-    m_dictionaryDock=new QDockWidget("Built-in Dictionary",this);
+    m_dictionaryDock=new QDockWidget("Dictionary",this);
     m_dictionaryDock->setObjectName("dictionaryDock");
     m_dictionaryDock->setAllowedAreas(Qt::LeftDockWidgetArea|Qt::RightDockWidgetArea);
 
@@ -304,6 +307,11 @@ void MainWindow::buildDictionaryDock()
     hint->setWordWrap(true);
     layout->addWidget(hint);
 
+    m_dictionaryMode=new QComboBox(panel);
+    m_dictionaryMode->addItems({"Auto (Offline + Online)","Offline only","Online only"});
+    m_dictionaryMode->setToolTip("Auto shows offline instantly and uses the online dictionary when internet is available.");
+    layout->addWidget(m_dictionaryMode);
+
     auto *row=new QHBoxLayout;
     m_dictionaryInput=new QLineEdit(panel);
     m_dictionaryInput->setPlaceholderText("Dictionary word...");
@@ -315,10 +323,10 @@ void MainWindow::buildDictionaryDock()
 
     m_dictionaryResult=new QTextBrowser(panel);
     m_dictionaryResult->setOpenExternalLinks(false);
-    m_dictionaryResult->setHtml("<h3>Dictionary ready</h3><p>Enter a word above. The dictionary works offline and includes a starter general/science/physics vocabulary.</p>");
+    m_dictionaryResult->setHtml("<h3>Dictionary ready</h3><p><b>Auto</b> mode works offline first and adds an online definition when internet is available.</p>");
     layout->addWidget(m_dictionaryResult,1);
 
-    auto *note=new QLabel("Offline built-in dictionary • no internet required",panel);
+    auto *note=new QLabel("Auto • Offline • Online   |   Online lookup stays inside AstraPDF",panel);
     note->setWordWrap(true);
     layout->addWidget(note);
 
@@ -328,6 +336,9 @@ void MainWindow::buildDictionaryDock()
 
     connect(lookup,&QPushButton::clicked,this,[this]{ lookupDictionaryWord(m_dictionaryInput->text()); });
     connect(m_dictionaryInput,&QLineEdit::returnPressed,this,[this]{ lookupDictionaryWord(m_dictionaryInput->text()); });
+    connect(m_dictionaryMode,qOverload<int>(&QComboBox::currentIndexChanged),this,[this]{
+        if(m_dictionaryInput && !m_dictionaryInput->text().trimmed().isEmpty()) lookupDictionaryWord(m_dictionaryInput->text());
+    });
 }
 
 void MainWindow::setNeonEnabled(bool enabled)
@@ -345,6 +356,18 @@ void MainWindow::advanceNeon()
     applyTheme();
 }
 
+void MainWindow::showOfflineDictionaryWord(const QString& word, const QString& definition, bool waitingForOnline)
+{
+    QString html=QStringLiteral("<h2>%1</h2>").arg(word.toHtmlEscaped());
+    if(definition.isEmpty())
+        html += "<p><b>Offline:</b> No local definition is stored for this word.</p>";
+    else
+        html += QStringLiteral("<p><b>Offline:</b> %1</p>").arg(definition.toHtmlEscaped());
+    if(waitingForOnline)
+        html += "<hr><p><i>Checking online dictionary…</i></p>";
+    m_dictionaryResult->setHtml(html);
+}
+
 void MainWindow::lookupDictionaryWord(const QString& rawWord)
 {
     const QString key=normalizedWord(rawWord);
@@ -352,12 +375,96 @@ void MainWindow::lookupDictionaryWord(const QString& rawWord)
         m_dictionaryResult->setHtml("<h3>Dictionary</h3><p>Enter a word first.</p>");
         return;
     }
-    const QString definition=definitionFor(key);
-    if(definition.isEmpty()){
-        m_dictionaryResult->setHtml(QStringLiteral("<h2>%1</h2><p>No offline definition is stored for this word yet.</p><p><b>Tip:</b> the current built-in set focuses on common mathematical, scientific, and physics vocabulary.</p>").arg(key.toHtmlEscaped()));
-    }else{
-        m_dictionaryResult->setHtml(QStringLiteral("<h2>%1</h2><p>%2</p>").arg(key.toHtmlEscaped(),definition.toHtmlEscaped()));
+
+    if(m_dictionaryInput && m_dictionaryInput->text()!=key) m_dictionaryInput->setText(key);
+    const QString offlineDefinition=definitionFor(key);
+    const int mode=m_dictionaryMode ? m_dictionaryMode->currentIndex() : 0;
+
+    if(mode==1){
+        showOfflineDictionaryWord(key,offlineDefinition,false);
+        statusBar()->showMessage("Dictionary: offline lookup",1800);
+        return;
     }
+
+    if(mode==0) showOfflineDictionaryWord(key,offlineDefinition,true);
+    else m_dictionaryResult->setHtml(QStringLiteral("<h2>%1</h2><p><i>Checking online dictionary…</i></p>").arg(key.toHtmlEscaped()));
+
+    lookupOnlineDictionaryWord(key,offlineDefinition);
+}
+
+void MainWindow::lookupOnlineDictionaryWord(const QString& word, const QString& offlineDefinition)
+{
+    const QString encoded=QString::fromUtf8(QUrl::toPercentEncoding(word));
+    QNetworkRequest request(QUrl(QStringLiteral("https://api.dictionaryapi.dev/api/v2/entries/en/%1").arg(encoded)));
+    request.setHeader(QNetworkRequest::UserAgentHeader,"AstraPDF/0.2");
+    request.setTransferTimeout(8000);
+    QNetworkReply *reply=m_network->get(request);
+
+    connect(reply,&QNetworkReply::finished,this,[this,reply,word,offlineDefinition]{
+        const int mode=m_dictionaryMode ? m_dictionaryMode->currentIndex() : 0;
+        const QByteArray data=reply->readAll();
+        const bool networkOk=reply->error()==QNetworkReply::NoError;
+        reply->deleteLater();
+
+        if(!networkOk){
+            if(mode==2){
+                m_dictionaryResult->setHtml(QStringLiteral("<h2>%1</h2><p><b>Online dictionary unavailable.</b></p><p>Check the internet connection and try again.</p>").arg(word.toHtmlEscaped()));
+            }else{
+                showOfflineDictionaryWord(word,offlineDefinition,false);
+                if(!offlineDefinition.isEmpty()) m_dictionaryResult->append("<p><i>Online lookup unavailable. Showing offline definition.</i></p>");
+                else m_dictionaryResult->append("<p><i>Online lookup unavailable and this word is not in the local starter dictionary.</i></p>");
+            }
+            statusBar()->showMessage("Online dictionary unavailable",2500);
+            return;
+        }
+
+        QJsonParseError parseError;
+        const QJsonDocument document=QJsonDocument::fromJson(data,&parseError);
+        if(parseError.error!=QJsonParseError::NoError || !document.isArray() || document.array().isEmpty()){
+            if(mode==2)
+                m_dictionaryResult->setHtml(QStringLiteral("<h2>%1</h2><p>No online definition found.</p>").arg(word.toHtmlEscaped()));
+            else{
+                showOfflineDictionaryWord(word,offlineDefinition,false);
+                m_dictionaryResult->append("<p><i>No additional online definition found.</i></p>");
+            }
+            return;
+        }
+
+        const QJsonObject entry=document.array().first().toObject();
+        QString html=QStringLiteral("<h2>%1</h2>").arg(word.toHtmlEscaped());
+        if(mode==0 && !offlineDefinition.isEmpty())
+            html += QStringLiteral("<p><b>Offline:</b> %1</p><hr>").arg(offlineDefinition.toHtmlEscaped());
+
+        const QString phonetic=entry.value("phonetic").toString();
+        if(!phonetic.isEmpty()) html += QStringLiteral("<p><b>Pronunciation:</b> %1</p>").arg(phonetic.toHtmlEscaped());
+        html += "<p><b>Online:</b></p>";
+
+        const QJsonArray meanings=entry.value("meanings").toArray();
+        int meaningCount=0;
+        for(const QJsonValue& meaningValue:meanings){
+            if(meaningCount>=4) break;
+            const QJsonObject meaning=meaningValue.toObject();
+            const QString part=meaning.value("partOfSpeech").toString();
+            if(!part.isEmpty()) html += QStringLiteral("<h4>%1</h4>").arg(part.toHtmlEscaped());
+            const QJsonArray definitions=meaning.value("definitions").toArray();
+            int defCount=0;
+            for(const QJsonValue& defValue:definitions){
+                if(defCount>=2) break;
+                const QJsonObject def=defValue.toObject();
+                const QString text=def.value("definition").toString();
+                if(text.isEmpty()) continue;
+                html += QStringLiteral("<p>• %1</p>").arg(text.toHtmlEscaped());
+                const QString example=def.value("example").toString();
+                if(!example.isEmpty()) html += QStringLiteral("<p><i>Example: %1</i></p>").arg(example.toHtmlEscaped());
+                ++defCount;
+            }
+            ++meaningCount;
+        }
+
+        if(meaningCount==0) html += "<p>No online definition found.</p>";
+        m_dictionaryResult->setHtml(html);
+        statusBar()->showMessage("Online dictionary updated",1800);
+    });
 }
 
 void MainWindow::openPdf(const QString& filePath)

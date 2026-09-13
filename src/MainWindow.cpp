@@ -32,6 +32,15 @@ MainWindow::MainWindow(QWidget *parent):QMainWindow(parent),
                                    int(std::max<qreal>(40.0,r.height()/2.0)));
     });
     connect(m_canvas,&PdfCanvas::statusMessage,this,[this](const QString& s){statusBar()->showMessage(s,4000);});
+    connect(m_document,&QPdfDocument::statusChanged,this,[this](QPdfDocument::Status status){
+        if(status==QPdfDocument::Status::Ready){
+            finishOpenPdf();
+        }else if(status==QPdfDocument::Status::Error){
+            const int code=static_cast<int>(m_document->error());
+            QMessageBox::critical(this,"Open PDF",QStringLiteral("Could not open PDF. Error code: %1").arg(code));
+            m_currentFile.clear();
+        }
+    });
     resize(1280,860);
 }
 
@@ -94,16 +103,33 @@ void MainWindow::buildToolbar()
 
 void MainWindow::openPdf(const QString& filePath)
 {
-    m_document->close(); m_currentFile.clear();
-    auto err=m_document->load(filePath);
+    m_document->close();
+    m_currentFile=filePath;
+    statusBar()->showMessage("Loading PDF...");
+
+    const auto err=m_document->load(filePath);
     if(err!=QPdfDocument::Error::None){
-        QMessageBox::critical(this,"Open PDF",QStringLiteral("Could not open PDF. Error code: %1").arg(static_cast<int>(err))); return;
+        QMessageBox::critical(this,"Open PDF",QStringLiteral("Could not open PDF. Error code: %1").arg(static_cast<int>(err)));
+        m_currentFile.clear();
+        return;
     }
-    m_currentFile=filePath; m_canvas->setDocument(m_document); m_canvas->setViewportWidth(m_scrollArea->viewport()->width());
+
+    if(m_document->status()==QPdfDocument::Status::Ready)
+        finishOpenPdf();
+}
+
+void MainWindow::finishOpenPdf()
+{
+    if(m_currentFile.isEmpty() || m_document->status()!=QPdfDocument::Status::Ready)
+        return;
+
+    m_canvas->setDocument(m_document);
+    m_canvas->setViewportWidth(m_scrollArea->viewport()->width());
+
     const int count=m_document->pageCount();
     { QSignalBlocker b(m_pageSpin); m_pageSpin->setRange(1,std::max(1,count)); m_pageSpin->setValue(1); }
     m_pageTotal->setText(QStringLiteral("/ %1").arg(count));
-    setWindowTitle(QStringLiteral("%1 - AstraPDF").arg(QFileInfo(filePath).fileName()));
+    setWindowTitle(QStringLiteral("%1 - AstraPDF").arg(QFileInfo(m_currentFile).fileName()));
     statusBar()->showMessage(QStringLiteral("Opened %1 pages.").arg(count),3500);
 }
 

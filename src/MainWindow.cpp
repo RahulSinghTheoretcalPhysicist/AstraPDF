@@ -9,6 +9,8 @@
 #include <QKeySequence>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMenu>
+#include <QMenuBar>
 #include <QMessageBox>
 #include <QPdfDocument>
 #include <QResizeEvent>
@@ -48,14 +50,14 @@ void MainWindow::buildUi()
 {
     m_scrollArea->setWidget(m_canvas); m_scrollArea->setWidgetResizable(false);
     m_scrollArea->setAlignment(Qt::AlignLeft|Qt::AlignTop);
-    setCentralWidget(m_scrollArea); setWindowTitle("AstraPDF"); statusBar()->showMessage("Ready");
+    setCentralWidget(m_scrollArea); setWindowTitle("AstraPDF"); statusBar()->showMessage("Ready - use File > Open PDF or Ctrl+O");
 }
 
 void MainWindow::buildActions()
 {
-    m_open=new QAction("Open",this); m_open->setShortcut(QKeySequence::Open);
+    m_open=new QAction("Open PDF...",this); m_open->setShortcut(QKeySequence::Open);
     connect(m_open,&QAction::triggered,this,[this]{
-        QString p=QFileDialog::getOpenFileName(this,"Open PDF",{},"PDF documents (*.pdf)");
+        QString p=QFileDialog::getOpenFileName(this,"Open PDF",QString(),"PDF documents (*.pdf);;All files (*.*)");
         if(!p.isEmpty())openPdf(p);
     });
     m_copy=new QAction("Copy",this); m_copy->setShortcut(QKeySequence::Copy);
@@ -64,12 +66,19 @@ void MainWindow::buildActions()
     connect(m_highlight,&QAction::triggered,this,[this]{if(!m_canvas->addHighlightFromSelection())statusBar()->showMessage("Select text first.",2500);});
     m_cosInspect=new QAction("Inspect COS",this);
     connect(m_cosInspect,&QAction::triggered,this,&MainWindow::inspectCos);
+
+    QMenu *fileMenu=menuBar()->addMenu("&File");
+    fileMenu->addAction(m_open);
+    QAction *exitAction=fileMenu->addAction("Exit");
+    exitAction->setShortcut(QKeySequence::Quit);
+    connect(exitAction,&QAction::triggered,this,&QWidget::close);
 }
 
 void MainWindow::buildToolbar()
 {
-    QToolBar *tb=addToolBar("Reader"); tb->setMovable(false); tb->addAction(m_open); tb->addSeparator();
-    QAction *prev=tb->addAction("◀"),*next=tb->addAction("▶");
+    QToolBar *tb=addToolBar("Reader"); tb->setMovable(false); tb->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    tb->addAction(m_open); tb->addSeparator();
+    QAction *prev=tb->addAction("Previous"),*next=tb->addAction("Next");
     connect(prev,&QAction::triggered,this,[this]{m_canvas->setCurrentPage(m_canvas->currentPage()-1);});
     connect(next,&QAction::triggered,this,[this]{m_canvas->setCurrentPage(m_canvas->currentPage()+1);});
 
@@ -78,7 +87,7 @@ void MainWindow::buildToolbar()
     connect(m_pageSpin,qOverload<int>(&QSpinBox::valueChanged),this,[this](int p){m_canvas->setCurrentPage(p-1);});
 
     tb->addSeparator();
-    QAction *zout=tb->addAction("−"),*zin=tb->addAction("+"),*z100=tb->addAction("100%");
+    QAction *zout=tb->addAction("Zoom -"),*zin=tb->addAction("Zoom +"),*z100=tb->addAction("100%");
     connect(zout,&QAction::triggered,m_canvas,&PdfCanvas::zoomOut);
     connect(zin,&QAction::triggered,m_canvas,&PdfCanvas::zoomIn);
     connect(z100,&QAction::triggered,this,[this]{m_canvas->setZoom(1.0);updateZoomUi();});
@@ -89,7 +98,7 @@ void MainWindow::buildToolbar()
     tb->addSeparator();
     m_modeCombo=new QComboBox(tb);
     m_modeCombo->addItems({"Single Page","Continuous","Facing Pages","Continuous Facing"});
-    m_modeCombo->setCurrentIndex(1); tb->addWidget(m_modeCombo);
+    m_modeCombo->setCurrentIndex(0); tb->addWidget(m_modeCombo);
     connect(m_modeCombo,qOverload<int>(&QComboBox::currentIndexChanged),this,[this]{applyModeFromCombo();});
 
     tb->addSeparator();

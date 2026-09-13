@@ -27,6 +27,14 @@ jobs:
           modules: "qtpdf"
           cache: true
 
+      - name: Apply source compile fix
+        shell: pwsh
+        run: |
+          $path = "src/MainWindow.cpp"
+          $content = Get-Content $path -Raw
+          $content = $content.Replace('const QString title=item.value("title").toString();', 'QString title=item.value("title").toString();')
+          Set-Content -Path $path -Value $content -Encoding UTF8
+
       - name: Configure CMake
         shell: pwsh
         run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64

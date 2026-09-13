@@ -96,11 +96,22 @@ QImage PdfCanvas::renderedPage(int page,QSize pixelSize)
     const QString key=cacheKey(page,pixelSize);
     auto it=m_cache.constFind(key);
     if(it!=m_cache.constEnd())return it.value();
-    const QImage image=m_document->render(page,pixelSize,QPdfDocumentRenderOptions{});
-    if(!image.isNull()){
-        while(m_cache.size()>=16)m_cache.erase(m_cache.begin());
-        m_cache.insert(key,image);
+
+    const QImage raw=m_document->render(page,pixelSize,QPdfDocumentRenderOptions{});
+    if(raw.isNull())return {};
+
+    // QPdfDocument may render PDF page transparency. Composite the result on
+    // opaque white paper, matching normal PDF viewers such as Adobe Reader.
+    QImage image(pixelSize,QImage::Format_ARGB32_Premultiplied);
+    image.fill(Qt::white);
+    {
+        QPainter pagePainter(&image);
+        pagePainter.setCompositionMode(QPainter::CompositionMode_SourceOver);
+        pagePainter.drawImage(QPoint(0,0),raw);
     }
+
+    while(m_cache.size()>=16)m_cache.erase(m_cache.begin());
+    m_cache.insert(key,image);
     return image;
 }
 void PdfCanvas::clearRenderCache(){ m_cache.clear(); }
@@ -139,11 +150,15 @@ void PdfCanvas::paintEvent(QPaintEvent *event)
 
     for(const auto& p:m_layout.pages){
         if(!p.rect.intersects(dirty))continue;
-        painter.fillRect(p.rect.adjusted(-2,-2,2,2),QColor(25,25,25));
+
+        // Dark canvas around the page, but the PDF sheet itself is always white.
+        painter.fillRect(p.rect.adjusted(-3,-3,3,3),QColor(20,22,26));
+        painter.fillRect(p.rect,Qt::white);
+
         QSize px(qMax(1,int(std::round(p.rect.width()))),qMax(1,int(std::round(p.rect.height()))));
         QImage image=renderedPage(p.page,px);
         if(!image.isNull())painter.drawImage(p.rect,image);
-        painter.setPen(QColor(120,120,120)); painter.drawRect(p.rect);
+        painter.setPen(QColor(150,150,150)); painter.drawRect(p.rect);
 
         for(const auto& ann:m_highlights)if(ann.page==p.page){
             painter.save(); painter.setPen(Qt::NoPen); painter.setBrush(QColor(255,235,59,95));

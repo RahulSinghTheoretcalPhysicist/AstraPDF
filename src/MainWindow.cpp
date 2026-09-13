@@ -4,6 +4,7 @@
 #include <QAction>
 #include <QColor>
 #include <QComboBox>
+#include <QDesktopServices>
 #include <QDialog>
 #include <QDockWidget>
 #include <QFileDialog>
@@ -38,6 +39,7 @@
 #include <QToolBar>
 #include <QToolButton>
 #include <QUrl>
+#include <QUrlQuery>
 #include <QVBoxLayout>
 #include <algorithm>
 
@@ -95,6 +97,12 @@ QString definitionFor(const QString& key)
     };
     return dictionary.value(key);
 }
+
+QString plainWikipediaSnippet(QString snippet)
+{
+    snippet.remove(QRegularExpression(QStringLiteral("<[^>]*>")));
+    return snippet;
+}
 }
 
 MainWindow::MainWindow(QWidget *parent):QMainWindow(parent),
@@ -121,6 +129,9 @@ MainWindow::MainWindow(QWidget *parent):QMainWindow(parent),
     connect(m_canvas,&PdfCanvas::statusMessage,this,[this](const QString& s){ statusBar()->showMessage(s,4000); });
     connect(m_canvas,&PdfCanvas::selectionChanged,this,[this](const QString& text){
         const QString trimmed=text.trimmed();
+        if(auto *webInput=findChild<QLineEdit*>("webSearchInput")){
+            if(!trimmed.isEmpty()) webInput->setText(trimmed.left(500));
+        }
         if(trimmed.isEmpty() || trimmed.contains(QRegularExpression(QStringLiteral("\\s")))) return;
         if(m_dictionaryInput) m_dictionaryInput->setText(trimmed);
         if(m_dictionaryDock && m_dictionaryDock->isVisible()) lookupDictionaryWord(trimmed);
@@ -287,6 +298,171 @@ void MainWindow::buildToolbar()
 
     tb->addSeparator();
     tb->addAction(m_dictionaryAction);
+
+    QAction *webSearchAction=new QAction("Search",this);
+    webSearchAction->setShortcut(QKeySequence("Ctrl+Shift+F"));
+    webSearchAction->setToolTip("Search DuckDuckGo / Wikipedia (Ctrl+Shift+F)");
+    tb->addAction(webSearchAction);
+
+    auto *webDock=new QDockWidget("Web Search",this);
+    webDock->setObjectName("webSearchDock");
+    webDock->setAllowedAreas(Qt::LeftDockWidgetArea|Qt::RightDockWidgetArea);
+    auto *webPanel=new QWidget(webDock);
+    auto *webLayout=new QVBoxLayout(webPanel);
+    webLayout->setContentsMargins(10,10,10,10);
+    webLayout->setSpacing(8);
+    auto *webHint=new QLabel("Search the web without leaving your PDF workflow. Selected PDF text is copied here automatically.",webPanel);
+    webHint->setWordWrap(true);
+    webLayout->addWidget(webHint);
+    auto *provider=new QComboBox(webPanel);
+    provider->setObjectName("webSearchProvider");
+    provider->addItems({"DuckDuckGo + Wikipedia","DuckDuckGo","Wikipedia"});
+    webLayout->addWidget(provider);
+    auto *webRow=new QHBoxLayout;
+    auto *webInput=new QLineEdit(webPanel);
+    webInput->setObjectName("webSearchInput");
+    webInput->setPlaceholderText("Search query...");
+    webInput->setClearButtonEnabled(true);
+    auto *webGo=new QPushButton("Search",webPanel);
+    webRow->addWidget(webInput,1);
+    webRow->addWidget(webGo);
+    webLayout->addLayout(webRow);
+    auto *webResult=new QTextBrowser(webPanel);
+    webResult->setObjectName("webSearchResult");
+    webResult->setOpenLinks(false);
+    webResult->setOpenExternalLinks(false);
+    webResult->setHtml("<h3>Web Search ready</h3><p>Use DuckDuckGo, Wikipedia, or both. No paid API is required.</p>");
+    webLayout->addWidget(webResult,1);
+    auto *webNote=new QLabel("Free search • no API key • result links open in your normal browser",webPanel);
+    webNote->setWordWrap(true);
+    webLayout->addWidget(webNote);
+    webDock->setWidget(webPanel);
+    addDockWidget(Qt::RightDockWidgetArea,webDock);
+    webDock->hide();
+
+    connect(webResult,&QTextBrowser::anchorClicked,this,[](const QUrl& url){ QDesktopServices::openUrl(url); });
+
+    auto runWebSearch=[this,webInput,provider,webResult]{
+        const QString query=webInput->text().trimmed();
+        if(query.isEmpty()){
+            webResult->setHtml("<h3>Web Search</h3><p>Enter something to search.</p>");
+            return;
+        }
+        webInput->setProperty("currentQuery",query);
+        webResult->setHtml(QStringLiteral("<h2>%1</h2><p><i>Searching…</i></p>").arg(query.toHtmlEscaped()));
+        const int mode=provider->currentIndex();
+
+        if(mode==0 || mode==1){
+            QUrl url("https://api.duckduckgo.com/");
+            QUrlQuery params;
+            params.addQueryItem("q",query);
+            params.addQueryItem("format","json");
+            params.addQueryItem("no_html","1");
+            params.addQueryItem("no_redirect","1");
+            params.addQueryItem("skip_disambig","1");
+            url.setQuery(params);
+            QNetworkRequest request(url);
+            request.setHeader(QNetworkRequest::UserAgentHeader,"AstraPDF/0.2");
+            request.setTransferTimeout(8000);
+            QNetworkReply *reply=m_network->get(request);
+            connect(reply,&QNetworkReply::finished,this,[reply,webInput,webResult,query]{
+                const QByteArray data=reply->readAll();
+                const bool ok=reply->error()==QNetworkReply::NoError;
+                reply->deleteLater();
+                if(webInput->property("currentQuery").toString()!=query) return;
+                QString html="<hr><h3>DuckDuckGo</h3>";
+                if(!ok){
+                    webResult->append(html+"<p>DuckDuckGo is unavailable right now.</p>");
+                    return;
+                }
+                const QJsonDocument doc=QJsonDocument::fromJson(data);
+                if(!doc.isObject()){
+                    webResult->append(html+"<p>No DuckDuckGo result.</p>");
+                    return;
+                }
+                const QJsonObject obj=doc.object();
+                const QString heading=obj.value("Heading").toString();
+                const QString abstractText=obj.value("AbstractText").toString();
+                const QString abstractUrl=obj.value("AbstractURL").toString();
+                if(!heading.isEmpty()) html += QStringLiteral("<h4>%1</h4>").arg(heading.toHtmlEscaped());
+                if(!abstractText.isEmpty()) html += QStringLiteral("<p>%1</p>").arg(abstractText.toHtmlEscaped());
+                if(!abstractUrl.isEmpty()) html += QStringLiteral("<p><a href=\"%1\">Open source</a></p>").arg(abstractUrl.toHtmlEscaped());
+                int shown=0;
+                const QJsonArray topics=obj.value("RelatedTopics").toArray();
+                for(const QJsonValue& v:topics){
+                    if(shown>=8) break;
+                    QJsonObject item=v.toObject();
+                    if(item.contains("Topics")){
+                        const QJsonArray nested=item.value("Topics").toArray();
+                        for(const QJsonValue& nv:nested){
+                            if(shown>=8) break;
+                            const QJsonObject n=nv.toObject();
+                            const QString text=n.value("Text").toString();
+                            const QString link=n.value("FirstURL").toString();
+                            if(text.isEmpty()) continue;
+                            html += link.isEmpty() ? QStringLiteral("<p>• %1</p>").arg(text.toHtmlEscaped()) : QStringLiteral("<p>• <a href=\"%1\">%2</a></p>").arg(link.toHtmlEscaped(),text.toHtmlEscaped());
+                            ++shown;
+                        }
+                    }else{
+                        const QString text=item.value("Text").toString();
+                        const QString link=item.value("FirstURL").toString();
+                        if(text.isEmpty()) continue;
+                        html += link.isEmpty() ? QStringLiteral("<p>• %1</p>").arg(text.toHtmlEscaped()) : QStringLiteral("<p>• <a href=\"%1\">%2</a></p>").arg(link.toHtmlEscaped(),text.toHtmlEscaped());
+                        ++shown;
+                    }
+                }
+                if(abstractText.isEmpty() && shown==0) html += "<p>No instant answer found. Try Wikipedia or open a web result from your browser.</p>";
+                webResult->append(html);
+            });
+        }
+
+        if(mode==0 || mode==2){
+            QUrl url("https://en.wikipedia.org/w/api.php");
+            QUrlQuery params;
+            params.addQueryItem("action","query");
+            params.addQueryItem("list","search");
+            params.addQueryItem("srsearch",query);
+            params.addQueryItem("format","json");
+            params.addQueryItem("utf8","1");
+            params.addQueryItem("srlimit","8");
+            url.setQuery(params);
+            QNetworkRequest request(url);
+            request.setHeader(QNetworkRequest::UserAgentHeader,"AstraPDF/0.2");
+            request.setTransferTimeout(8000);
+            QNetworkReply *reply=m_network->get(request);
+            connect(reply,&QNetworkReply::finished,this,[reply,webInput,webResult,query]{
+                const QByteArray data=reply->readAll();
+                const bool ok=reply->error()==QNetworkReply::NoError;
+                reply->deleteLater();
+                if(webInput->property("currentQuery").toString()!=query) return;
+                QString html="<hr><h3>Wikipedia</h3>";
+                if(!ok){
+                    webResult->append(html+"<p>Wikipedia is unavailable right now.</p>");
+                    return;
+                }
+                const QJsonDocument doc=QJsonDocument::fromJson(data);
+                const QJsonArray results=doc.object().value("query").toObject().value("search").toArray();
+                if(results.isEmpty()){
+                    webResult->append(html+"<p>No Wikipedia results found.</p>");
+                    return;
+                }
+                for(const QJsonValue& value:results){
+                    const QJsonObject item=value.toObject();
+                    const QString title=item.value("title").toString();
+                    const QString snippet=plainWikipediaSnippet(item.value("snippet").toString());
+                    QUrl article("https://en.wikipedia.org/wiki/"+QString::fromUtf8(QUrl::toPercentEncoding(title.replace(' ','_'))));
+                    html += QStringLiteral("<p><b><a href=\"%1\">%2</a></b><br>%3</p>").arg(article.toString().toHtmlEscaped(),title.toHtmlEscaped(),snippet.toHtmlEscaped());
+                }
+                webResult->append(html);
+            });
+        }
+        statusBar()->showMessage(QStringLiteral("Searching web: %1").arg(query),1800);
+    };
+
+    connect(webSearchAction,&QAction::triggered,this,[webDock,webInput]{ webDock->show(); webDock->raise(); webInput->setFocus(); });
+    connect(webGo,&QPushButton::clicked,this,runWebSearch);
+    connect(webInput,&QLineEdit::returnPressed,this,runWebSearch);
+
     tb->addAction(m_copy);
     tb->addAction(m_highlight);
     tb->addAction(m_cosInspect);

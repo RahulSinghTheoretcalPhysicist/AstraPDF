@@ -1,0 +1,83 @@
+name: Build Windows EXE
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-x64:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Qt 6.7.3
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.7.3"
+          host: "windows"
+          target: "desktop"
+          arch: "win64_msvc2019_64"
+          modules: "qtpdf"
+          cache: true
+
+      - name: Configure CMake
+        shell: pwsh
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+
+      - name: Build Release
+        shell: pwsh
+        run: cmake --build build --config Release --parallel
+
+      - name: Create portable directory
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item "build/Release/AstraPDF.exe" "dist/AstraPDF.exe"
+          windeployqt --release --no-translations --dir dist "dist/AstraPDF.exe"
+
+      - name: Verify output
+        shell: pwsh
+        run: |
+          if (!(Test-Path "dist/AstraPDF.exe")) { throw "AstraPDF.exe was not generated." }
+          Get-ChildItem dist -Recurse
+
+      - name: Package portable ZIP
+        shell: pwsh
+        run: Compress-Archive -Path "dist/*" -DestinationPath "AstraPDF-Portable-Windows-x64.zip" -Force
+
+      - name: Build Windows installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $iscc)) {
+            $cmd = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+            if ($cmd) { $iscc = $cmd.Source }
+          }
+          if (!(Test-Path $iscc)) { throw "Inno Setup compiler not found." }
+          & $iscc "installer\AstraPDF.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed with exit code $LASTEXITCODE." }
+          if (!(Test-Path "installer-output\AstraPDF-Setup-Windows-x64.exe")) {
+            throw "Installer EXE was not created."
+          }
+
+      - name: Upload portable package
+        uses: actions/upload-artifact@v4
+        with:
+          name: AstraPDF-Portable-Windows-x64
+          path: AstraPDF-Portable-Windows-x64.zip
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: AstraPDF-Setup-Windows-x64
+          path: installer-output/AstraPDF-Setup-Windows-x64.exe
+          if-no-files-found: error
+          retention-days: 30

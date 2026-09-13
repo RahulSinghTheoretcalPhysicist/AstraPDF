@@ -1,0 +1,62 @@
+[
+  {
+    "path": ".github/workflows/windows-build.yml",
+    "bytes": 2575
+  },
+  {
+    "path": "CMakeLists.txt",
+    "bytes": 838
+  },
+  {
+    "path": "GITHUB_COMPILE_GUIDE.md",
+    "bytes": 2875
+  },
+  {
+    "path": "README.md",
+    "bytes": 1963
+  },
+  {
+    "path": "docs/ENGINEERING.md",
+    "bytes": 998
+  },
+  {
+    "path": "installer/AstraPDF.iss",
+    "bytes": 1186
+  },
+  {
+    "path": "src/CosInspector.cpp",
+    "bytes": 1664
+  },
+  {
+    "path": "src/CosInspector.h",
+    "bytes": 311
+  },
+  {
+    "path": "src/LayoutManager.cpp",
+    "bytes": 3351
+  },
+  {
+    "path": "src/LayoutManager.h",
+    "bytes": 715
+  },
+  {
+    "path": "src/MainWindow.cpp",
+    "bytes": 6719
+  },
+  {
+    "path": "src/MainWindow.h",
+    "bytes": 972
+  },
+  {
+    "path": "src/PdfCanvas.cpp",
+    "bytes": 8554
+  },
+  {
+    "path": "src/PdfCanvas.h",
+    "bytes": 2478
+  },
+  {
+    "path": "src/main.cpp",
+    "bytes": 428
+  }
+]

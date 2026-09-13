@@ -3,6 +3,9 @@
 #include <QObject>
 #include <QString>
 #include <QStringList>
+#include <QKeySequence>
+#include <QLabel>
+#include <QSignalBlocker>
 
 class QAction;
 class QDockWidget;

@@ -1,6 +1,6 @@
 #pragma once
 #include <QMainWindow>
-class QAction; class QComboBox; class QDockWidget; class QLabel; class QLineEdit; class QPdfDocument;
+class QAction; class QComboBox; class QDockWidget; class QLabel; class QLineEdit; class QNetworkAccessManager; class QPdfDocument;
 class QResizeEvent; class QScrollArea; class QSpinBox; class QTextBrowser; class QTimer; class PdfCanvas;
 
 class MainWindow final : public QMainWindow {
@@ -19,6 +19,8 @@ private:
     void setNeonEnabled(bool enabled);
     void advanceNeon();
     void lookupDictionaryWord(const QString& rawWord);
+    void lookupOnlineDictionaryWord(const QString& word, const QString& offlineDefinition);
+    void showOfflineDictionaryWord(const QString& word, const QString& definition, bool waitingForOnline=false);
 
     QPdfDocument *m_document=nullptr;
     QScrollArea *m_scrollArea=nullptr;
@@ -31,7 +33,9 @@ private:
     QLineEdit *m_search=nullptr;
     QDockWidget *m_dictionaryDock=nullptr;
     QLineEdit *m_dictionaryInput=nullptr;
+    QComboBox *m_dictionaryMode=nullptr;
     QTextBrowser *m_dictionaryResult=nullptr;
+    QNetworkAccessManager *m_network=nullptr;
     QTimer *m_neonTimer=nullptr;
     bool m_neonEnabled=true;
     int m_neonHue=190;

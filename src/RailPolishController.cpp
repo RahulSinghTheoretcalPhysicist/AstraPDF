@@ -88,13 +88,13 @@ QIcon cleanIcon(const QString& key)
         p.setPen(QPen(yellow,1.7));
         p.drawLine(QPointF(15,18),QPointF(21,18));
         p.drawLine(QPointF(27,18),QPointF(33,18));
-    }else if(key=="pagemode"){
-        p.setPen(QPen(cyan,1.9,Qt::SolidLine,Qt::RoundCap,Qt::RoundJoin));
-        p.setBrush(QColor(16,43,55));
-        p.drawRoundedRect(QRectF(9,10,12,28),2,2);
-        p.drawRoundedRect(QRectF(27,10,12,28),2,2);
-        p.setPen(QPen(pink,2.3,Qt::SolidLine,Qt::RoundCap));
-        p.drawLine(QPointF(20,33),QPointF(34,19));
+    }else if(key=="continue"){
+        QFont f(QStringLiteral("Segoe UI"));
+        f.setPointSize(18);
+        f.setBold(true);
+        p.setFont(f);
+        p.setPen(cyan);
+        p.drawText(pix.rect(),Qt::AlignCenter,QStringLiteral("C"));
     }else if(key=="view"){
         p.setPen(QPen(cyan,2.0,Qt::SolidLine,Qt::RoundCap,Qt::RoundJoin));
         p.setBrush(QColor(72,46,96));
@@ -138,7 +138,7 @@ QString keyForButton(QToolButton *button)
     const QString s=t.toLower();
     if(button->objectName()=="fileRailButton") return "file";
     if(button->objectName()=="viewRailButton") return "view";
-    if(button->objectName()=="pageModeRailButton") return "pagemode";
+    if(button->objectName()=="pageModeRailButton") return "continue";
     if(s.contains("open")) return "open";
     if(s.contains("previous")) return "previous";
     if(s=="next" || s.contains("next page")) return "next";
@@ -181,7 +181,6 @@ void RailPolishController::polishRail()
 {
     if(!m_toolbar) return;
 
-    // Intentionally narrow: the rail should feel like an edge strip, not a sidebar.
     m_toolbar->setToolButtonStyle(Qt::ToolButtonIconOnly);
     m_toolbar->setIconSize(QSize(22,22));
     m_toolbar->setFixedWidth(40);
@@ -195,19 +194,89 @@ void RailPolishController::polishRail()
         "QToolBar#readerToolbar QToolButton:pressed{background:rgba(19,48,58,220);}"
         "QToolBar#readerToolbar::separator{height:1px;background:transparent;margin:0;}"));
 
+    QSpinBox *pageSpin=nullptr;
+    QLabel *pageTotal=nullptr;
+    QLabel *zoomLabel=nullptr;
+
     for(QComboBox *w:m_toolbar->findChildren<QComboBox*>()) w->hide();
     for(QLineEdit *w:m_toolbar->findChildren<QLineEdit*>()) w->hide();
-    for(QSpinBox *w:m_toolbar->findChildren<QSpinBox*>()) w->hide();
-    for(QLabel *w:m_toolbar->findChildren<QLabel*>()) w->hide();
+    for(QSpinBox *w:m_toolbar->findChildren<QSpinBox*>()){
+        pageSpin=w;
+        w->hide();
+    }
+    for(QLabel *w:m_toolbar->findChildren<QLabel*>()){
+        const QString text=w->text().trimmed();
+        if(text.startsWith('/')) pageTotal=w;
+        if(text.contains('%')) zoomLabel=w;
+        w->hide();
+    }
+
+    QToolButton *pageModeButton=m_toolbar->findChild<QToolButton*>("pageModeRailButton");
+    if(pageModeButton){
+        pageModeButton->setText("Continue");
+        pageModeButton->setToolTip("Continue");
+        pageModeButton->setIcon(cleanIcon("continue"));
+    }
+
+    QToolButton *pageChip=m_toolbar->findChild<QToolButton*>("pageNumberChip");
+    if(!pageChip && pageSpin){
+        pageChip=new QToolButton(m_toolbar);
+        pageChip->setObjectName("pageNumberChip");
+        pageChip->setProperty("noExpand",true);
+        pageChip->setToolButtonStyle(Qt::ToolButtonTextOnly);
+        pageChip->setToolTip("Page number");
+        pageChip->setFixedSize(34,26);
+        pageChip->setStyleSheet("QToolButton{min-width:34px;max-width:34px;min-height:26px;max-height:26px;padding:0;border:1px solid rgba(120,235,245,90);border-radius:6px;background:rgba(8,18,25,165);color:#eaffff;font-size:10px;font-weight:600;}QToolButton:hover{border-color:#84f5ff;background:rgba(20,50,62,220);}");
+
+        auto updatePageChip=[pageChip,pageSpin,pageTotal]{
+            QString total=pageTotal?pageTotal->text().trimmed():QString();
+            if(total.startsWith('/')) total=total.mid(1).trimmed();
+            if(total.isEmpty()) total="0";
+            pageChip->setText(QStringLiteral("%1/%2").arg(pageSpin->value()).arg(total));
+        };
+        updatePageChip();
+        connect(pageSpin,qOverload<int>(&QSpinBox::valueChanged),pageChip,[updatePageChip](int){ updatePageChip(); });
+        if(pageTotal) connect(pageTotal,&QLabel::textChanged,pageChip,[updatePageChip](const QString&){ updatePageChip(); });
+
+        QAction *before=nullptr;
+        for(QAction *a:m_toolbar->actions()){
+            if(a && a->text().compare("Zoom Out",Qt::CaseInsensitive)==0){ before=a; break; }
+        }
+        m_toolbar->insertWidget(before,pageChip);
+    }
+
+    QToolButton *zoomChip=m_toolbar->findChild<QToolButton*>("zoomPercentChip");
+    if(!zoomChip && zoomLabel){
+        zoomChip=new QToolButton(m_toolbar);
+        zoomChip->setObjectName("zoomPercentChip");
+        zoomChip->setProperty("noExpand",true);
+        zoomChip->setToolButtonStyle(Qt::ToolButtonTextOnly);
+        zoomChip->setToolTip("Zoom");
+        zoomChip->setFixedSize(34,24);
+        zoomChip->setText(zoomLabel->text().trimmed());
+        zoomChip->setStyleSheet("QToolButton{min-width:34px;max-width:34px;min-height:24px;max-height:24px;padding:0;border:none;background:transparent;color:#dffcff;font-size:10px;font-weight:600;}QToolButton:hover{background:rgba(31,70,83,175);border-radius:6px;}");
+        connect(zoomLabel,&QLabel::textChanged,zoomChip,[zoomChip](const QString& text){ zoomChip->setText(text.trimmed()); });
+
+        QAction *before=nullptr;
+        for(QAction *a:m_toolbar->actions()){
+            if(pageModeButton && m_toolbar->widgetForAction(a)==pageModeButton){ before=a; break; }
+        }
+        m_toolbar->insertWidget(before,zoomChip);
+    }
 
     for(QToolButton *button:m_toolbar->findChildren<QToolButton*>()){
         if(button->parentWidget() && button->parentWidget()->objectName()=="windowControlStrip") continue;
+        if(button->objectName()=="pageNumberChip" || button->objectName()=="zoomPercentChip") continue;
         button->setProperty("noExpand",true);
         button->setToolButtonStyle(Qt::ToolButtonIconOnly);
         button->setFixedSize(32,32);
         button->setIconSize(QSize(22,22));
         const QString key=keyForButton(button);
         if(!key.isEmpty()) button->setIcon(cleanIcon(key));
+        if(key=="pdfsearch"){
+            button->setText("PDF Search");
+            button->setToolTip("PDF Search");
+        }
         button->installEventFilter(this);
     }
 }
@@ -226,6 +295,7 @@ QString RailPolishController::buttonLabel(QToolButton *button) const
 void RailPolishController::setHovered(QToolButton *button, bool hovered)
 {
     if(!button || (button->parentWidget() && button->parentWidget()->objectName()=="windowControlStrip")) return;
+    if(button->objectName()=="pageNumberChip" || button->objectName()=="zoomPercentChip") return;
     button->setIconSize(hovered?QSize(28,28):QSize(22,22));
 }
 
@@ -253,7 +323,6 @@ void RailPolishController::syncRailVisibility()
     if(!m_window || !m_toolbar) return;
     if(m_window->menuBar()) m_window->menuBar()->hide();
 
-    // Keep the strip perfectly aligned to the physical left edge.
     m_toolbar->setFixedWidth(40);
     m_toolbar->setFixedHeight(qMax(300,m_window->height()-8));
     m_toolbar->move(0,4);

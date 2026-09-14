@@ -18,6 +18,7 @@ qt_add_executable(AstraPDF WIN32
     src/ReaderSessionController.h src/ReaderSessionController.cpp
     src/UiEnhancer.h src/UiEnhancer.cpp
     src/BackgroundController.h src/BackgroundController.cpp
+    src/InterfaceController.h src/InterfaceController.cpp
 )
 
 target_link_libraries(AstraPDF PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Pdf Qt6::Network)

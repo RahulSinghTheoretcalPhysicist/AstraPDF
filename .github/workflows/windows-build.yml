@@ -27,14 +27,6 @@ jobs:
           modules: "qtpdf"
           cache: true
 
-      - name: Apply source compile fix
-        shell: pwsh
-        run: |
-          $path = "src/MainWindow.cpp"
-          $content = Get-Content $path -Raw
-          $content = $content.Replace('const QString title=item.value("title").toString();', 'QString title=item.value("title").toString();')
-          Set-Content -Path $path -Value $content -Encoding UTF8
-
       - name: Configure CMake
         shell: pwsh
         run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
@@ -56,6 +48,7 @@ jobs:
           if (!(Test-Path "dist/AstraPDF.exe")) {
             throw "AstraPDF.exe was not generated."
           }
+          Get-FileHash "dist/AstraPDF.exe" -Algorithm SHA256 | Format-List
 
       - name: Package portable ZIP
         shell: pwsh
@@ -90,9 +83,15 @@ jobs:
       - name: Verify installer
         shell: pwsh
         run: |
-          if (!(Test-Path "installer-output/AstraPDF-Setup-Windows-x64.exe")) {
+          $installer = "installer-output/AstraPDF-Setup-Windows-x64.exe"
+          if (!(Test-Path $installer)) {
             throw "Installer EXE was not generated."
           }
+          $size = (Get-Item $installer).Length
+          if ($size -lt 1000000) {
+            throw "Installer looks unexpectedly small: $size bytes"
+          }
+          Get-FileHash $installer -Algorithm SHA256 | Format-List
 
       - name: Upload portable package
         uses: actions/upload-artifact@v4

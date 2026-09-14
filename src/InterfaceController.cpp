@@ -16,6 +16,8 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QPainter>
+#include <QPainterPath>
+#include <QPen>
 #include <QPixmap>
 #include <QPushButton>
 #include <QSpinBox>
@@ -25,13 +27,142 @@
 #include <QToolButton>
 
 namespace {
-QIcon glyphIcon(const QString& glyph, int pointSize=16)
+QPixmap iconCanvas()
 {
-    QPixmap pix(32,32);
+    QPixmap pix(44,44);
     pix.fill(Qt::transparent);
+    return pix;
+}
+
+QIcon magnifierIcon(const QString& mark=QString(), bool web=false)
+{
+    QPixmap pix=iconCanvas();
     QPainter p(&pix);
     p.setRenderHint(QPainter::Antialiasing,true);
-    p.setPen(QColor("#e9fbff"));
+    QPen pen(QColor("#7ef7ff"),3.0,Qt::SolidLine,Qt::RoundCap,Qt::RoundJoin);
+    p.setPen(pen);
+    p.setBrush(Qt::NoBrush);
+    p.drawEllipse(QRectF(8,7,22,22));
+    p.drawLine(QPointF(27,27),QPointF(37,37));
+    if(web){
+        QPen thin(QColor("#ff52d9"),1.5);
+        p.setPen(thin);
+        p.drawArc(QRectF(11,10,16,16),0,360*16);
+        p.drawLine(QPointF(19,10),QPointF(19,26));
+        p.drawLine(QPointF(11,18),QPointF(27,18));
+    }else if(!mark.isEmpty()){
+        p.setPen(QPen(QColor("#ffffff"),2.5,Qt::SolidLine,Qt::RoundCap));
+        p.drawLine(QPointF(14,18),QPointF(24,18));
+        if(mark=="+") p.drawLine(QPointF(19,13),QPointF(19,23));
+    }
+    return QIcon(pix);
+}
+
+QIcon historyIcon()
+{
+    QPixmap pix=iconCanvas();
+    QPainter p(&pix);
+    p.setRenderHint(QPainter::Antialiasing,true);
+    p.setPen(QPen(QColor("#82f8ff"),2.0,Qt::SolidLine,Qt::RoundCap,Qt::RoundJoin));
+    p.setBrush(QColor("#173d63"));
+    QPainterPath book;
+    book.moveTo(6,10); book.quadTo(16,7,21,12); book.lineTo(21,35); book.quadTo(15,29,6,32); book.closeSubpath();
+    p.drawPath(book);
+    QPainterPath book2;
+    book2.moveTo(38,10); book2.quadTo(28,7,23,12); book2.lineTo(23,35); book2.quadTo(29,29,38,32); book2.closeSubpath();
+    p.setBrush(QColor("#5a256b"));
+    p.drawPath(book2);
+    p.setPen(QPen(QColor("#ffd65a"),3.0,Qt::SolidLine,Qt::RoundCap));
+    p.drawLine(QPointF(28,27),QPointF(38,17));
+    p.setPen(QPen(QColor("#fff3b0"),1.4));
+    p.drawLine(QPointF(37,17),QPointF(39,15));
+    return QIcon(pix);
+}
+
+QIcon libraryIcon()
+{
+    QPixmap pix=iconCanvas();
+    QPainter p(&pix);
+    p.setRenderHint(QPainter::Antialiasing,true);
+    p.setPen(QPen(QColor("#8af5ff"),2));
+    p.setBrush(QColor("#15527a"));
+    p.drawRoundedRect(QRectF(5,13,34,23),4,4);
+    p.setBrush(QColor("#1f86aa"));
+    p.drawRoundedRect(QRectF(8,9,14,8),3,3);
+    p.setPen(QPen(QColor("#c8fbff"),1.6));
+    p.drawLine(QPointF(12,22),QPointF(32,22));
+    p.drawLine(QPointF(12,27),QPointF(29,27));
+    return QIcon(pix);
+}
+
+QIcon pageModeIcon()
+{
+    QPixmap pix=iconCanvas();
+    QPainter p(&pix);
+    p.setRenderHint(QPainter::Antialiasing,true);
+    p.setPen(QPen(QColor("#7ef7ff"),2.0,Qt::SolidLine,Qt::RoundCap,Qt::RoundJoin));
+    p.setBrush(QColor("#112a35"));
+    p.drawRoundedRect(QRectF(7,7,13,28),2,2);
+    p.drawRoundedRect(QRectF(23,7,13,28),2,2);
+    p.setPen(QPen(QColor("#ff57d7"),3.0,Qt::SolidLine,Qt::RoundCap));
+    p.drawLine(QPointF(19,31),QPointF(34,16));
+    p.setPen(QPen(QColor("#ffe379"),1.8,Qt::SolidLine,Qt::RoundCap));
+    p.drawLine(QPointF(33,16),QPointF(37,12));
+    return QIcon(pix);
+}
+
+QIcon folderIcon()
+{
+    QPixmap pix=iconCanvas();
+    QPainter p(&pix);
+    p.setRenderHint(QPainter::Antialiasing,true);
+    p.setPen(QPen(QColor("#89f7ff"),2.0));
+    p.setBrush(QColor("#1b668a"));
+    QPainterPath path;
+    path.moveTo(5,14); path.lineTo(17,14); path.lineTo(21,18); path.lineTo(39,18); path.lineTo(36,35); path.lineTo(7,35); path.closeSubpath();
+    p.drawPath(path);
+    p.setBrush(QColor("#2ea7cf"));
+    p.drawRoundedRect(QRectF(7,10,15,8),3,3);
+    return QIcon(pix);
+}
+
+QIcon telescopeIcon()
+{
+    QPixmap pix=iconCanvas();
+    QPainter p(&pix);
+    p.setRenderHint(QPainter::Antialiasing,true);
+    p.setPen(QPen(QColor("#8cf8ff"),2.5,Qt::SolidLine,Qt::RoundCap,Qt::RoundJoin));
+    p.setBrush(QColor("#51316f"));
+    QPolygonF body;
+    body << QPointF(8,17) << QPointF(30,10) << QPointF(34,20) << QPointF(12,27);
+    p.drawPolygon(body);
+    p.setBrush(QColor("#ff59d6"));
+    p.drawEllipse(QRectF(29,9,8,13));
+    p.setPen(QPen(QColor("#ffd866"),2.2,Qt::SolidLine,Qt::RoundCap));
+    p.drawLine(QPointF(20,24),QPointF(16,37));
+    p.drawLine(QPointF(20,24),QPointF(27,37));
+    return QIcon(pix);
+}
+
+QIcon arrowIcon(bool right)
+{
+    QPixmap pix=iconCanvas();
+    QPainter p(&pix);
+    p.setRenderHint(QPainter::Antialiasing,true);
+    p.setPen(QPen(QColor("#82f7ff"),3.0,Qt::SolidLine,Qt::RoundCap,Qt::RoundJoin));
+    const qreal x1=right?10:34, x2=right?33:11;
+    p.drawLine(QPointF(x1,22),QPointF(x2,22));
+    p.drawLine(QPointF(x2,22),QPointF(right?25:19,14));
+    p.drawLine(QPointF(x2,22),QPointF(right?25:19,30));
+    return QIcon(pix);
+}
+
+QIcon simpleGlyph(const QString& glyph, const QColor& color=QColor("#e9fbff"), int pointSize=17)
+{
+    QPixmap pix=iconCanvas();
+    QPainter p(&pix);
+    p.setRenderHint(QPainter::Antialiasing,true);
+    p.setPen(color);
     QFont f(QStringLiteral("Segoe UI Symbol"));
     f.setPointSize(pointSize);
     f.setBold(true);
@@ -74,64 +205,83 @@ void InterfaceController::configureReaderRail()
     m_toolbar->setMovable(false);
     m_toolbar->setFloatable(false);
     m_toolbar->setToolButtonStyle(Qt::ToolButtonIconOnly);
-    m_toolbar->setIconSize(QSize(21,21));
-    m_toolbar->setMinimumWidth(48);
-    m_toolbar->setMaximumWidth(54);
+    m_toolbar->setIconSize(QSize(28,28));
+    m_toolbar->setMinimumWidth(52);
+    m_toolbar->setMaximumWidth(148);
     m_toolbar->setStyleSheet(QStringLiteral(
-        "QToolBar#readerToolbar{background:#10151c;border:none;border-right:1px solid #24414a;padding:5px 4px;spacing:3px;}"
-        "QToolBar#readerToolbar QToolButton{min-width:36px;max-width:36px;min-height:36px;max-height:36px;padding:0;margin:1px;border:1px solid transparent;border-radius:9px;background:#151c24;color:#e9fbff;}"
-        "QToolBar#readerToolbar QToolButton:hover{background:#1c2b34;border-color:#00d9ff;}"
-        "QToolBar#readerToolbar QToolButton:pressed{background:#0a1117;border-color:#75efff;}"
-        "QToolBar#readerToolbar::separator{height:1px;background:#29343f;margin:4px 5px;}"));
+        "QToolBar#readerToolbar{background:transparent;border:none;padding:5px 3px;spacing:2px;}"
+        "QToolBar#readerToolbar QToolButton{min-height:42px;max-height:42px;min-width:42px;padding:0 8px;margin:1px;border:none;border-radius:12px;background:transparent;color:#eefcff;font-size:13px;font-weight:600;text-align:left;}"
+        "QToolBar#readerToolbar QToolButton:hover{background:rgba(18,45,58,210);color:white;}"
+        "QToolBar#readerToolbar QToolButton:pressed{background:rgba(6,25,34,235);}"
+        "QToolBar#readerToolbar::separator{height:4px;background:transparent;margin:1px;}"));
+
+    if(m_window->menuBar()){
+        QMenu *fileMenu=nullptr;
+        QMenu *viewMenu=nullptr;
+        for(QAction *top:m_window->menuBar()->actions()){
+            if(!top || !top->menu()) continue;
+            if(top->text().contains("File",Qt::CaseInsensitive)) fileMenu=top->menu();
+            else if(top->text().contains("View",Qt::CaseInsensitive)) viewMenu=top->menu();
+        }
+        if(fileMenu){
+            auto *button=new QToolButton(m_toolbar);
+            button->setObjectName("fileRailButton");
+            button->setText("File");
+            button->setIcon(folderIcon());
+            button->setToolButtonStyle(Qt::ToolButtonIconOnly);
+            button->setPopupMode(QToolButton::InstantPopup);
+            button->setMenu(fileMenu);
+            button->setToolTip("File");
+            m_toolbar->insertWidget(m_toolbar->actions().isEmpty()?nullptr:m_toolbar->actions().first(),button);
+        }
+        if(viewMenu){
+            auto *button=new QToolButton(m_toolbar);
+            button->setObjectName("viewRailButton");
+            button->setText("View");
+            button->setIcon(telescopeIcon());
+            button->setToolButtonStyle(Qt::ToolButtonIconOnly);
+            button->setPopupMode(QToolButton::InstantPopup);
+            button->setMenu(viewMenu);
+            button->setToolTip("View");
+            QAction *before=m_toolbar->actions().size()>1?m_toolbar->actions().at(1):nullptr;
+            m_toolbar->insertWidget(before,button);
+        }
+        m_window->menuBar()->hide();
+    }
 
     for(QAction *a:m_toolbar->actions()){
         if(!a) continue;
         const QString t=a->text();
         if(t.contains("Open PDF",Qt::CaseInsensitive)){
-            a->setIcon(m_window->style()->standardIcon(QStyle::SP_DirOpenIcon));
-            a->setToolTip("Open PDF  Ctrl+O");
+            a->setText("Open"); a->setIcon(folderIcon()); a->setToolTip("Open PDF");
         }else if(t.compare("Previous",Qt::CaseInsensitive)==0){
-            a->setIcon(m_window->style()->standardIcon(QStyle::SP_ArrowBack));
-            a->setToolTip("Previous page");
+            a->setText("Previous"); a->setIcon(arrowIcon(false)); a->setToolTip("Previous page");
         }else if(t.compare("Next",Qt::CaseInsensitive)==0){
-            a->setIcon(m_window->style()->standardIcon(QStyle::SP_ArrowForward));
-            a->setToolTip("Next page");
+            a->setText("Next"); a->setIcon(arrowIcon(true)); a->setToolTip("Next page");
         }else if(t==QString::fromUtf8("−")){
-            a->setIcon(glyphIcon(QString::fromUtf8("⊖"),15));
-            a->setToolTip("Zoom out");
+            a->setText("Zoom Out"); a->setIcon(magnifierIcon("-")); a->setToolTip("Zoom Out");
         }else if(t=="+"){
-            a->setIcon(glyphIcon(QString::fromUtf8("⊕"),15));
-            a->setToolTip("Zoom in");
+            a->setText("Zoom In"); a->setIcon(magnifierIcon("+")); a->setToolTip("Zoom In");
         }else if(t.compare("Dictionary",Qt::CaseInsensitive)==0){
-            a->setIcon(glyphIcon("Aa",11));
-            a->setToolTip("Dictionary  Ctrl+D");
+            a->setText("Dictionary"); a->setIcon(simpleGlyph("Aa",QColor("#ffd95f"),12)); a->setToolTip("Dictionary");
         }else if(t.compare("Search",Qt::CaseInsensitive)==0){
-            a->setIcon(glyphIcon(QString::fromUtf8("⌕"),18));
-            a->setToolTip("Web search  Ctrl+Shift+F");
+            a->setText("Search"); a->setIcon(magnifierIcon(QString(),true)); a->setToolTip("Internet Search");
         }else if(t.compare("History",Qt::CaseInsensitive)==0){
-            a->setIcon(glyphIcon(QString::fromUtf8("↶"),17));
-            a->setToolTip("Reading history  Ctrl+Shift+H");
+            a->setText("History"); a->setIcon(historyIcon()); a->setToolTip("History");
         }else if(t.contains("Library",Qt::CaseInsensitive)){
-            a->setIcon(glyphIcon(QString::fromUtf8("▣"),16));
-            a->setToolTip("PDF library  Ctrl+Shift+L");
+            a->setText("Library"); a->setIcon(libraryIcon()); a->setToolTip("PDF Library");
         }else if(t.compare("Copy",Qt::CaseInsensitive)==0){
-            a->setIcon(glyphIcon(QString::fromUtf8("⧉"),15));
-            a->setToolTip("Copy selection  Ctrl+C");
+            a->setText("Copy"); a->setIcon(simpleGlyph(QString::fromUtf8("⧉"),QColor("#a8f7ff"),15));
         }else if(t.compare("Highlight",Qt::CaseInsensitive)==0){
-            a->setIcon(glyphIcon(QString::fromUtf8("✦"),15));
-            a->setToolTip("Highlight selection");
+            a->setText("Highlight"); a->setIcon(simpleGlyph(QString::fromUtf8("✦"),QColor("#ffe56b"),16));
         }else if(t.contains("Inspect COS",Qt::CaseInsensitive)){
-            a->setIcon(glyphIcon("i",16));
-            a->setToolTip("Inspect PDF structure");
+            a->setText("Inspect"); a->setIcon(simpleGlyph("i",QColor("#9df7ff"),17));
         }else if(t.compare("Min",Qt::CaseInsensitive)==0){
-            a->setIcon(glyphIcon(QString::fromUtf8("−"),17));
-            a->setToolTip("Minimize");
+            a->setText("Minimize"); a->setIcon(simpleGlyph(QString::fromUtf8("−"),QColor("#9ff8ff"),18));
         }else if(t.compare("Window",Qt::CaseInsensitive)==0){
-            a->setIcon(glyphIcon(QString::fromUtf8("□"),17));
-            a->setToolTip("Window mode");
+            a->setText("Window"); a->setIcon(simpleGlyph(QString::fromUtf8("□"),QColor("#9ff8ff"),18));
         }else if(t.compare("Close",Qt::CaseInsensitive)==0){
-            a->setIcon(glyphIcon(QString::fromUtf8("×"),18));
-            a->setToolTip("Close AstraPDF");
+            a->setText("Close"); a->setIcon(simpleGlyph(QString::fromUtf8("×"),QColor("#ff6f9d"),18));
         }else if(t=="100%"){
             a->setVisible(false);
         }
@@ -140,7 +290,7 @@ void InterfaceController::configureReaderRail()
 
 void InterfaceController::configurePageModes()
 {
-    if(!m_window || !m_canvas) return;
+    if(!m_window || !m_canvas || !m_toolbar) return;
 
     QComboBox *modeCombo=nullptr;
     for(QComboBox *combo:m_window->findChildren<QComboBox*>()){
@@ -149,27 +299,26 @@ void InterfaceController::configurePageModes()
             break;
         }
     }
-    if(modeCombo){
-        modeCombo->setCurrentIndex(1);
-        modeCombo->hide();
-    }else{
-        m_canvas->setViewMode(ViewMode::Continuous);
-    }
+    if(modeCombo){ modeCombo->setCurrentIndex(1); modeCombo->hide(); }
+    else m_canvas->setViewMode(ViewMode::Continuous);
 
-    QMenu *viewMenu=nullptr;
-    for(QAction *a:m_window->menuBar()->actions()){
-        if(a->menu() && a->text().contains("View",Qt::CaseInsensitive)){ viewMenu=a->menu(); break; }
-    }
-    if(!viewMenu) return;
+    auto *modeButton=new QToolButton(m_toolbar);
+    modeButton->setObjectName("pageModeRailButton");
+    modeButton->setText("Page Mode");
+    modeButton->setIcon(pageModeIcon());
+    modeButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    modeButton->setPopupMode(QToolButton::InstantPopup);
+    modeButton->setToolTip("Page Mode");
 
-    QMenu *modeMenu=viewMenu->addMenu("Page Mode");
+    auto *modeMenu=new QMenu(modeButton);
+    modeMenu->setStyleSheet("QMenu{background:#111a22;color:#f2fbff;border:1px solid #2a5966;border-radius:8px;padding:6px;}QMenu::item{padding:8px 24px 8px 12px;border-radius:6px;}QMenu::item:selected{background:#164555;}");
     auto *group=new QActionGroup(modeMenu);
     group->setExclusive(true);
     const struct ModeItem { const char *name; ViewMode mode; } modes[] = {
-        {"Continuous",ViewMode::Continuous},
         {"Single Page",ViewMode::SinglePage},
-        {"Facing Pages",ViewMode::FacingPages},
-        {"Continuous Facing",ViewMode::ContinuousFacing}
+        {"Single Continuous",ViewMode::Continuous},
+        {"Double Pages",ViewMode::FacingPages},
+        {"Double Continuous",ViewMode::ContinuousFacing}
     };
     for(const auto& item:modes){
         QAction *a=modeMenu->addAction(QString::fromLatin1(item.name));
@@ -186,11 +335,11 @@ void InterfaceController::configurePageModes()
                 case ViewMode::ContinuousFacing:index=3;break;
                 }
                 modeCombo->setCurrentIndex(index);
-            }else if(m_canvas){
-                m_canvas->setViewMode(item.mode);
-            }
+            }else if(m_canvas) m_canvas->setViewMode(item.mode);
         });
     }
+    modeButton->setMenu(modeMenu);
+    m_toolbar->addWidget(modeButton);
 }
 
 void InterfaceController::applyPanelStyle(QDockWidget *dock)
@@ -216,14 +365,10 @@ void InterfaceController::configurePanels()
         applyPanelStyle(dock);
         if(dock->objectName()=="libraryDock"){
             dock->setMinimumWidth(380);
-            connect(dock,&QDockWidget::visibilityChanged,this,[this,dock](bool visible){
-                if(visible) m_window->resizeDocks({dock},{430},Qt::Horizontal);
-            });
+            connect(dock,&QDockWidget::visibilityChanged,this,[this,dock](bool visible){ if(visible) m_window->resizeDocks({dock},{430},Qt::Horizontal); });
         }else if(dock->objectName()=="historyDock"){
             dock->setMinimumWidth(350);
-            connect(dock,&QDockWidget::visibilityChanged,this,[this,dock](bool visible){
-                if(visible) m_window->resizeDocks({dock},{390},Qt::Horizontal);
-            });
+            connect(dock,&QDockWidget::visibilityChanged,this,[this,dock](bool visible){ if(visible) m_window->resizeDocks({dock},{390},Qt::Horizontal); });
         }
     }
 }
@@ -233,18 +378,17 @@ void InterfaceController::configureSearch()
     if(!m_toolbar || !m_canvas) return;
     for(QLineEdit *edit:m_toolbar->findChildren<QLineEdit*>()){
         if(edit->placeholderText().contains("Search in PDF",Qt::CaseInsensitive)){
-            m_pdfSearch=edit;
-            edit->hide();
-            break;
+            m_pdfSearch=edit; edit->hide(); break;
         }
     }
 
     QAction *find=findAction(m_toolbar,"Find Next");
+    if(!find) find=findAction(m_toolbar,"Find");
     if(!find) return;
     QObject::disconnect(find,nullptr,nullptr,nullptr);
-    find->setIcon(glyphIcon(QString::fromUtf8("⌕"),18));
-    find->setText("Find");
-    find->setToolTip("Find text in PDF");
+    find->setIcon(magnifierIcon());
+    find->setText("PDF Search");
+    find->setToolTip("Search inside PDF");
     connect(find,&QAction::triggered,this,[this]{
         const QString previous=m_pdfSearch ? m_pdfSearch->text() : QString();
         bool ok=false;
@@ -262,34 +406,30 @@ void InterfaceController::configureZoomEditor()
     m_zoomEditor->setObjectName("compactZoomEditor");
     m_zoomEditor->setText(QStringLiteral("%1%").arg(qRound(m_canvas->zoom()*100.0)));
     m_zoomEditor->setAlignment(Qt::AlignCenter);
-    m_zoomEditor->setToolTip("Type zoom percentage, e.g. 125%");
-    m_zoomEditor->setFixedSize(44,27);
-    m_zoomEditor->setStyleSheet("QLineEdit{font-size:11px;padding:2px;border-radius:6px;background:#0b1117;border:1px solid #2e4a55;color:#eaffff;}QLineEdit:focus{border-color:#00d9ff;}");
+    m_zoomEditor->setToolTip("Zoom percentage");
+    m_zoomEditor->setFixedSize(46,28);
+    m_zoomEditor->setStyleSheet("QLineEdit{font-size:11px;padding:2px;border-radius:7px;background:#0b1117;border:1px solid #2e4a55;color:#eaffff;}QLineEdit:focus{border-color:#00d9ff;}");
     m_toolbar->addWidget(m_zoomEditor);
 
-    QAction *fit=m_toolbar->addAction(glyphIcon(QString::fromUtf8("↔"),16),"Fit");
-    fit->setToolTip("Fit page to available width");
+    QAction *fit=m_toolbar->addAction(simpleGlyph(QString::fromUtf8("↔"),QColor("#83f8ff"),16),"Fit Width");
+    fit->setToolTip("Fit Width");
     connect(fit,&QAction::triggered,this,[this]{
         m_canvas->fitToWidth();
         m_zoomEditor->setText(QStringLiteral("%1%").arg(qRound(m_canvas->zoom()*100.0)));
     });
 
     connect(m_zoomEditor,&QLineEdit::editingFinished,this,[this]{
-        QString text=m_zoomEditor->text().trimmed();
-        text.remove('%');
-        bool ok=false;
-        const double percent=text.toDouble(&ok);
+        QString text=m_zoomEditor->text().trimmed(); text.remove('%');
+        bool ok=false; const double percent=text.toDouble(&ok);
         if(ok && percent>=20.0 && percent<=500.0) m_canvas->setZoom(percent/100.0);
         m_zoomEditor->setText(QStringLiteral("%1%").arg(qRound(m_canvas->zoom()*100.0)));
     });
 
     for(QAction *a:m_toolbar->actions()){
         if(!a) continue;
-        if(a->text()=="+" || a->text()==QString::fromUtf8("−")){
+        if(a->text()=="Zoom In" || a->text()=="Zoom Out"){
             connect(a,&QAction::triggered,this,[this]{
-                QTimer::singleShot(0,this,[this]{
-                    if(m_zoomEditor) m_zoomEditor->setText(QStringLiteral("%1%").arg(qRound(m_canvas->zoom()*100.0)));
-                });
+                QTimer::singleShot(0,this,[this]{ if(m_zoomEditor) m_zoomEditor->setText(QStringLiteral("%1%").arg(qRound(m_canvas->zoom()*100.0))); });
             });
         }
     }
@@ -300,13 +440,12 @@ void InterfaceController::compactToolbarWidgets()
     if(!m_toolbar) return;
     for(QLabel *label:m_toolbar->findChildren<QLabel*>()){
         const QString text=label->text().trimmed();
-        if(text=="Page" || text.startsWith('/')) label->hide();
-        else if(text.contains('%')) label->hide();
+        if(text=="Page" || text.startsWith('/') || text.contains('%')) label->hide();
     }
     for(QSpinBox *spin:m_toolbar->findChildren<QSpinBox*>()){
-        spin->setFixedWidth(44);
+        spin->setFixedWidth(46);
         spin->setToolTip("Page number");
-        spin->setStyleSheet("QSpinBox{font-size:11px;padding:2px;background:#0b1117;border:1px solid #2e4a55;border-radius:6px;color:#eaffff;}QSpinBox:focus{border-color:#00d9ff;}");
+        spin->setStyleSheet("QSpinBox{font-size:11px;padding:2px;background:#0b1117;border:1px solid #2e4a55;border-radius:7px;color:#eaffff;}QSpinBox:focus{border-color:#00d9ff;}");
     }
 }
 
@@ -314,8 +453,9 @@ void InterfaceController::decorateToolButtons()
 {
     if(!m_toolbar) return;
     for(QToolButton *button:m_toolbar->findChildren<QToolButton*>()){
-        button->setFixedSize(38,38);
-        button->setIconSize(QSize(21,21));
+        button->setToolButtonStyle(Qt::ToolButtonIconOnly);
+        button->setFixedSize(46,44);
+        button->setIconSize(QSize(28,28));
         button->installEventFilter(this);
     }
 }
@@ -323,8 +463,17 @@ void InterfaceController::decorateToolButtons()
 bool InterfaceController::eventFilter(QObject *watched, QEvent *event)
 {
     if(auto *button=qobject_cast<QToolButton*>(watched)){
-        if(event->type()==QEvent::Enter) button->setIconSize(QSize(28,28));
-        else if(event->type()==QEvent::Leave) button->setIconSize(QSize(21,21));
+        if(event->type()==QEvent::Enter){
+            button->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+            button->setIconSize(QSize(32,32));
+            button->setMinimumWidth(46);
+            button->setMaximumWidth(140);
+            button->resize(132,44);
+        }else if(event->type()==QEvent::Leave){
+            button->setToolButtonStyle(Qt::ToolButtonIconOnly);
+            button->setIconSize(QSize(28,28));
+            button->setFixedSize(46,44);
+        }
     }
     return QObject::eventFilter(watched,event);
 }

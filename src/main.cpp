@@ -6,7 +6,6 @@
 #include "BackgroundController.h"
 #include "InterfaceController.h"
 #include "RailPolishController.h"
-#include "TargetedRailFixController.h"
 
 int main(int argc, char *argv[])
 {
@@ -21,7 +20,6 @@ int main(int argc, char *argv[])
     BackgroundController backgrounds(&w,&w);
     InterfaceController interfaceController(&w,&w);
     RailPolishController railPolish(&w,&w);
-    TargetedRailFixController targetedRailFix(&w,&w);
     w.show();
 
     if(argc>1)

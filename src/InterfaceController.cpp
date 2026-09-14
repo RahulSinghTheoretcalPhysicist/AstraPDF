@@ -179,8 +179,9 @@ InterfaceController::InterfaceController(MainWindow *window, QObject *parent)
     configureWindowControls();
     decorateToolButtons();
 
-    qApp->installEventFilter(this);
-    QTimer::singleShot(0,this,[this]{ hideRail(); });
+    // RailPolishController is the single owner of global rail show/hide behavior.
+    // Do not install this controller as a global event filter too, otherwise both
+    // controllers fight over toolbar width/visibility and the PDF/rail can blink.
 }
 
 void InterfaceController::configureReaderRail()
@@ -388,26 +389,22 @@ void InterfaceController::configureSearch()
         const QString text=QInputDialog::getText(m_window,"Search in PDF","Search text:",QLineEdit::Normal,previous,&ok);
         if(!ok || text.trimmed().isEmpty()) return;
         if(m_pdfSearch) m_pdfSearch->setText(text);
-        m_canvas->findNext(text);
+        m_canvas->findNext(text.trimmed());
     });
 }
 
 void InterfaceController::configureZoomEditor()
 {
-    if(!m_window || !m_canvas) return;
+    if(!m_toolbar || !m_canvas || !m_window) return;
 
-    if(m_zoomEditor) m_zoomEditor->hide();
-    for(QLineEdit *edit:m_toolbar->findChildren<QLineEdit*>()){
-        if(edit->objectName()=="compactZoomEditor") edit->hide();
-    }
+    // Keep the rail itself narrow: hide the inline editor, expose it from View.
+    if(auto *editor=m_toolbar->findChild<QWidget*>("compactZoomEditor")) editor->hide();
 
     QMenu *viewMenu=nullptr;
-    if(m_window->menuBar()){
-        for(QAction *a:m_window->menuBar()->actions()){
-            if(a->menu() && a->text().contains("View",Qt::CaseInsensitive)){
-                viewMenu=a->menu();
-                break;
-            }
+    for(QAction *top:m_window->menuBar()->actions()){
+        if(top && top->menu() && top->text().contains("View",Qt::CaseInsensitive)){
+            viewMenu=top->menu();
+            break;
         }
     }
     if(!viewMenu) return;
@@ -416,7 +413,7 @@ void InterfaceController::configureZoomEditor()
     connect(setZoom,&QAction::triggered,this,[this]{
         bool ok=false;
         const int current=qRound(m_canvas->zoom()*100.0);
-        const int percent=QInputDialog::getInt(m_window,"Set Zoom","Zoom percentage:",current,20,500,5,&ok);
+        const int percent=QInputDialog::getInt(m_window,"Set Zoom","Zoom percent:",current,20,500,5,&ok);
         if(ok) m_canvas->setZoom(percent/100.0);
     });
     QAction *fitWidth=viewMenu->addAction("Fit Width");

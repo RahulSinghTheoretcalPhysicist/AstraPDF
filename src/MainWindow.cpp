@@ -448,7 +448,7 @@ void MainWindow::buildToolbar()
                 }
                 for(const QJsonValue& value:results){
                     const QJsonObject item=value.toObject();
-                    const QString title=item.value("title").toString();
+                    QString title=item.value("title").toString();
                     const QString snippet=plainWikipediaSnippet(item.value("snippet").toString());
                     QUrl article("https://en.wikipedia.org/wiki/"+QString::fromUtf8(QUrl::toPercentEncoding(title.replace(' ','_'))));
                     html += QStringLiteral("<p><b><a href=\"%1\">%2</a></b><br>%3</p>").arg(article.toString().toHtmlEscaped(),title.toHtmlEscaped(),snippet.toHtmlEscaped());

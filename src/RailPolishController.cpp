@@ -19,7 +19,6 @@
 #include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
-#include <QWidget>
 
 namespace {
 QPixmap canvas()
@@ -56,12 +55,19 @@ QIcon cleanIcon(const QString& key)
         p.drawLine(QPointF(a,24),QPointF(b,24));
         p.drawLine(QPointF(b,24),QPointF(right?29:19,16));
         p.drawLine(QPointF(b,24),QPointF(right?29:19,32));
-    }else if(key=="zoomin" || key=="zoomout"){
+    }else if(key=="zoomin" || key=="zoomout" || key=="pdfsearch" || key=="websearch"){
         p.drawEllipse(QRectF(9,8,22,22));
         p.drawLine(QPointF(29,29),QPointF(39,39));
-        p.setPen(QPen(soft,2.0,Qt::SolidLine,Qt::RoundCap));
-        p.drawLine(QPointF(15,19),QPointF(25,19));
-        if(key=="zoomin") p.drawLine(QPointF(20,14),QPointF(20,24));
+        if(key=="zoomin" || key=="zoomout"){
+            p.setPen(QPen(soft,2.0,Qt::SolidLine,Qt::RoundCap));
+            p.drawLine(QPointF(15,19),QPointF(25,19));
+            if(key=="zoomin") p.drawLine(QPointF(20,14),QPointF(20,24));
+        }else if(key=="websearch"){
+            p.setPen(QPen(pink,1.35,Qt::SolidLine,Qt::RoundCap));
+            p.drawEllipse(QRectF(13,12,14,14));
+            p.drawLine(QPointF(20,12),QPointF(20,26));
+            p.drawLine(QPointF(13,19),QPointF(27,19));
+        }
     }else if(key=="history"){
         p.setPen(QPen(cyan,1.8,Qt::SolidLine,Qt::RoundCap,Qt::RoundJoin));
         p.setBrush(QColor(25,79,107));
@@ -82,6 +88,13 @@ QIcon cleanIcon(const QString& key)
         p.setPen(QPen(yellow,1.7));
         p.drawLine(QPointF(15,18),QPointF(21,18));
         p.drawLine(QPointF(27,18),QPointF(33,18));
+    }else if(key=="pagemode"){
+        p.setPen(QPen(cyan,1.9,Qt::SolidLine,Qt::RoundCap,Qt::RoundJoin));
+        p.setBrush(QColor(16,43,55));
+        p.drawRoundedRect(QRectF(9,10,12,28),2,2);
+        p.drawRoundedRect(QRectF(27,10,12,28),2,2);
+        p.setPen(QPen(pink,2.3,Qt::SolidLine,Qt::RoundCap));
+        p.drawLine(QPointF(20,33),QPointF(34,19));
     }else if(key=="view"){
         p.setPen(QPen(cyan,2.0,Qt::SolidLine,Qt::RoundCap,Qt::RoundJoin));
         p.setBrush(QColor(72,46,96));
@@ -106,19 +119,10 @@ QIcon cleanIcon(const QString& key)
         p.setPen(QPen(soft,2.0,Qt::SolidLine,Qt::RoundCap));
         p.drawLine(QPointF(24,21),QPointF(24,31));
         p.drawPoint(QPointF(24,16));
-    }else if(key=="minimize"){
-        p.setPen(QPen(cyan,2.4,Qt::SolidLine,Qt::RoundCap));
-        p.drawLine(QPointF(13,29),QPointF(35,29));
-    }else if(key=="maximize"){
-        p.setPen(QPen(cyan,2.2,Qt::SolidLine,Qt::RoundCap,Qt::RoundJoin));
-        p.drawRoundedRect(QRectF(13,13,22,22),2,2);
-    }else if(key=="close"){
-        p.setPen(QPen(QColor("#ff718f"),2.6,Qt::SolidLine,Qt::RoundCap));
-        p.drawLine(QPointF(14,14),QPointF(34,34));
-        p.drawLine(QPointF(34,14),QPointF(14,34));
     }else{
         QFont f(QStringLiteral("Segoe UI Symbol"));
         f.setPointSize(15);
+        f.setBold(false);
         p.setFont(f);
         p.setPen(soft);
         p.drawText(pix.rect(),Qt::AlignCenter,QStringLiteral("•"));
@@ -134,11 +138,14 @@ QString keyForButton(QToolButton *button)
     const QString s=t.toLower();
     if(button->objectName()=="fileRailButton") return "file";
     if(button->objectName()=="viewRailButton") return "view";
+    if(button->objectName()=="pageModeRailButton") return "pagemode";
     if(s.contains("open")) return "open";
     if(s.contains("previous")) return "previous";
     if(s=="next" || s.contains("next page")) return "next";
     if(s.contains("zoom in")) return "zoomin";
     if(s.contains("zoom out")) return "zoomout";
+    if(s.contains("pdf search") || s=="find") return "pdfsearch";
+    if(s.contains("internet search") || s=="search") return "websearch";
     if(s.contains("history")) return "history";
     if(s.contains("library")) return "library";
     if(s.contains("dictionary")) return "dictionary";
@@ -187,48 +194,17 @@ void RailPolishController::polishRail()
         "QToolBar#readerToolbar QToolButton:pressed{background:rgba(19,48,58,220);}"
         "QToolBar#readerToolbar::separator{height:1px;background:transparent;margin:0;}"));
 
-    // Remove only the requested Page block and duplicate mode/search controls.
-    for(QSpinBox *w:m_toolbar->findChildren<QSpinBox*>()) w->hide();
+    // Keep the established rail behavior. Remove only the Page block itself.
     for(QComboBox *w:m_toolbar->findChildren<QComboBox*>()) w->hide();
     for(QLineEdit *w:m_toolbar->findChildren<QLineEdit*>()) w->hide();
-
-    for(QLabel *label:m_toolbar->findChildren<QLabel*>()){
-        const QString text=label->text().trimmed();
-        if(text.compare("Page",Qt::CaseInsensitive)==0 || text.startsWith('/')){
-            label->hide();
-        }else if(text.contains('%')){
-            label->setAlignment(Qt::AlignCenter);
-            label->setFixedSize(34,24);
-            label->setStyleSheet(QStringLiteral(
-                "QLabel{background:transparent;color:#dffcff;font-size:10px;font-weight:600;padding:0;margin:0;border:none;}"));
-            label->show();
-        }
-    }
-
-    if(QToolButton *mode=m_toolbar->findChild<QToolButton*>("pageModeRailButton")) mode->hide();
-    if(QToolButton *pageChip=m_toolbar->findChild<QToolButton*>("pageNumberChip")) pageChip->hide();
-    if(QWidget *strip=m_toolbar->findChild<QWidget*>("windowControlStrip")) strip->hide();
-
-    QAction *minAction=nullptr;
-    QAction *windowAction=nullptr;
-    QAction *closeAction=nullptr;
-
-    for(QAction *action:m_toolbar->actions()){
-        if(!action) continue;
-        const QString text=action->text().trimmed();
-        const QString lower=text.toLower();
-        const bool requestedSearchControl=
-            lower=="search" || lower=="internet search" || lower=="pdf search" ||
-            lower=="find" || lower=="find next";
-        if(requestedSearchControl) action->setVisible(false);
-        if(lower=="min" || lower=="minimize") minAction=action;
-        else if(lower=="window") windowAction=action;
-        else if(lower=="close") closeAction=action;
+    for(QSpinBox *w:m_toolbar->findChildren<QSpinBox*>()) w->hide();
+    for(QLabel *w:m_toolbar->findChildren<QLabel*>()){
+        const QString text=w->text().trimmed();
+        if(text.compare("Page",Qt::CaseInsensitive)==0 || text.startsWith('/')) w->hide();
     }
 
     for(QToolButton *button:m_toolbar->findChildren<QToolButton*>()){
         if(button->parentWidget() && button->parentWidget()->objectName()=="windowControlStrip") continue;
-        if(button->objectName()=="pageModeRailButton" || button->objectName()=="pageNumberChip") continue;
         button->setProperty("noExpand",true);
         button->setToolButtonStyle(Qt::ToolButtonIconOnly);
         button->setFixedSize(32,32);
@@ -237,40 +213,22 @@ void RailPolishController::polishRail()
         if(!key.isEmpty()) button->setIcon(cleanIcon(key));
         button->installEventFilter(this);
     }
-
-    auto addWindowButton=[this](const QString& objectName,const QString& key,const QString& tip,QAction *action){
-        if(!action || m_toolbar->findChild<QToolButton*>(objectName)) return;
-        auto *button=new QToolButton(m_toolbar);
-        button->setObjectName(objectName);
-        button->setProperty("noExpand",true);
-        button->setToolButtonStyle(Qt::ToolButtonIconOnly);
-        button->setIcon(cleanIcon(key));
-        button->setIconSize(QSize(22,22));
-        button->setFixedSize(32,32);
-        button->setToolTip(tip);
-        button->setStyleSheet("QToolButton{border:none;background:transparent;padding:0;border-radius:8px;}QToolButton:hover{background:rgba(31,70,83,175);}");
-        connect(button,&QToolButton::clicked,action,&QAction::trigger);
-        button->installEventFilter(this);
-        m_toolbar->addWidget(button);
-    };
-
-    addWindowButton("railMinimizeButton","minimize","Minimize",minAction);
-    addWindowButton("railMaximizeButton","maximize","Maximize / Restore",windowAction);
-    addWindowButton("railCloseButton","close","Close",closeAction);
 }
 
 QString RailPolishController::buttonLabel(QToolButton *button) const
 {
     if(!button) return {};
-    QString label=button->toolTip().trimmed();
-    if(label.isEmpty()) label=button->text().trimmed();
+    QString label=button->text().trimmed();
     if(label.isEmpty() && button->defaultAction()) label=button->defaultAction()->text().trimmed();
+    if(label.isEmpty()) label=button->toolTip().trimmed();
+    if(label=="Find Next" || label=="Find") label="PDF Search";
+    if(label=="Search") label="Internet Search";
     return label;
 }
 
 void RailPolishController::setHovered(QToolButton *button, bool hovered)
 {
-    if(!button) return;
+    if(!button || (button->parentWidget() && button->parentWidget()->objectName()=="windowControlStrip")) return;
     button->setIconSize(hovered?QSize(28,28):QSize(22,22));
 }
 
@@ -328,15 +286,17 @@ void RailPolishController::syncRailVisibility()
 bool RailPolishController::eventFilter(QObject *watched, QEvent *event)
 {
     if(auto *button=qobject_cast<QToolButton*>(watched)){
-        if(event->type()==QEvent::Enter){
-            if(m_hoveredButton && m_hoveredButton!=button) setHovered(m_hoveredButton,false);
-            m_hoveredButton=button;
-            setHovered(button,true);
-            showHoverLabel(button);
-        }else if(event->type()==QEvent::Leave){
-            setHovered(button,false);
-            if(m_hoveredButton==button) m_hoveredButton=nullptr;
-            hideHoverLabel();
+        if(!(button->parentWidget() && button->parentWidget()->objectName()=="windowControlStrip")){
+            if(event->type()==QEvent::Enter){
+                if(m_hoveredButton && m_hoveredButton!=button) setHovered(m_hoveredButton,false);
+                m_hoveredButton=button;
+                setHovered(button,true);
+                showHoverLabel(button);
+            }else if(event->type()==QEvent::Leave){
+                setHovered(button,false);
+                if(m_hoveredButton==button) m_hoveredButton=nullptr;
+                hideHoverLabel();
+            }
         }
     }
 

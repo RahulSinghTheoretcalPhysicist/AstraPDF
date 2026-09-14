@@ -1,7 +1,6 @@
 #include "TargetedRailFixController.h"
 #include "MainWindow.h"
 
-#include <QAbstractSpinBox>
 #include <QAction>
 #include <QColor>
 #include <QComboBox>
@@ -25,10 +24,10 @@ QIcon continueIcon()
     p.setRenderHint(QPainter::Antialiasing,true);
     p.setPen(Qt::NoPen);
     p.setBrush(QColor(19,58,70));
-    p.drawEllipse(QRectF(5,5,30,30));
+    p.drawEllipse(QRectF(6,6,28,28));
     p.setPen(QColor("#85f6ff"));
     QFont f(QStringLiteral("Segoe UI"));
-    f.setPointSize(16);
+    f.setPointSize(15);
     f.setBold(true);
     p.setFont(f);
     p.drawText(pix.rect(),Qt::AlignCenter,QStringLiteral("C"));
@@ -44,7 +43,7 @@ QIcon searchIcon()
     QPen pen(QColor("#83f5ff"),2.4,Qt::SolidLine,Qt::RoundCap,Qt::RoundJoin);
     p.setPen(pen);
     p.setBrush(Qt::NoBrush);
-    p.drawEllipse(QRectF(7,7,20,20));
+    p.drawEllipse(QRectF(8,8,19,19));
     p.drawLine(QPointF(25,25),QPointF(34,34));
     return QIcon(pix);
 }
@@ -68,43 +67,42 @@ void TargetedRailFixController::applyFixes()
     if(m_applying || !m_toolbar) return;
     m_applying=true;
 
-    // 1) Page section: keep only the actual page-number control and make it clean.
+    // Touch only the four requested rail items. Keep every other control unchanged.
+
+    // 1) Page number: remove the broken vertical Page / total labels and use the compact horizontal current/total chip.
     for(QLabel *label:m_toolbar->findChildren<QLabel*>()){
         const QString text=label->text().trimmed();
-        if(text.compare("Page",Qt::CaseInsensitive)==0 || text.startsWith('/')){
+        if(text.compare("Page",Qt::CaseInsensitive)==0 || text.startsWith('/') || text.contains('%'))
             label->hide();
-            continue;
-        }
-        if(text.contains('%') || text=="100" || text=="100%"){
-            label->setObjectName("targetZoomPercentLabel");
-            label->setAlignment(Qt::AlignCenter);
-            label->setFixedSize(36,22);
-            label->setStyleSheet(QStringLiteral(
-                "QLabel#targetZoomPercentLabel{background:transparent;color:#eefcff;"
-                "font-size:10px;font-weight:600;padding:0;margin:0;border:none;}"));
-            label->show();
-        }
+    }
+    for(QSpinBox *spin:m_toolbar->findChildren<QSpinBox*>()) spin->hide();
+
+    if(QToolButton *pageChip=m_toolbar->findChild<QToolButton*>("pageNumberChip")){
+        pageChip->setToolButtonStyle(Qt::ToolButtonTextOnly);
+        pageChip->setFixedSize(34,26);
+        pageChip->setToolTip("Page number");
+        pageChip->setStyleSheet(QStringLiteral(
+            "QToolButton{min-width:34px;max-width:34px;min-height:26px;max-height:26px;"
+            "padding:0;margin:0;border:1px solid rgba(120,235,245,90);border-radius:6px;"
+            "background:rgba(8,18,25,165);color:#eaffff;font-size:10px;font-weight:600;}"
+            "QToolButton:hover{border-color:#84f5ff;background:rgba(20,50,62,220);}"));
+        pageChip->show();
     }
 
-    for(QSpinBox *spin:m_toolbar->findChildren<QSpinBox*>()){
-        spin->setObjectName("targetPageNumberSpin");
-        spin->setButtonSymbols(QAbstractSpinBox::NoButtons);
-        spin->setAlignment(Qt::AlignCenter);
-        spin->setFixedSize(34,25);
-        spin->setToolTip("Page number");
-        spin->setStyleSheet(QStringLiteral(
-            "QSpinBox#targetPageNumberSpin{background:rgba(10,22,29,210);color:#f4fdff;"
-            "border:1px solid rgba(104,233,244,125);border-radius:6px;padding:0;"
-            "font-size:11px;font-weight:600;}"
-            "QSpinBox#targetPageNumberSpin:focus{border-color:#79f5ff;}"));
-        spin->show();
+    // 2) Zoom 100%: keep it centered and compact, directly aligned with the rail axis.
+    if(QToolButton *zoomChip=m_toolbar->findChild<QToolButton*>("zoomPercentChip")){
+        zoomChip->setToolButtonStyle(Qt::ToolButtonTextOnly);
+        zoomChip->setFixedSize(34,24);
+        zoomChip->setToolTip("Zoom");
+        zoomChip->setStyleSheet(QStringLiteral(
+            "QToolButton{min-width:34px;max-width:34px;min-height:24px;max-height:24px;"
+            "padding:0;margin:0;border:none;background:transparent;color:#dffcff;"
+            "font-size:10px;font-weight:600;}"
+            "QToolButton:hover{background:rgba(31,70,83,175);border-radius:6px;}"));
+        zoomChip->show();
     }
 
-    // Hide the old mode combo/search field so they cannot leak text into the narrow rail.
-    for(QComboBox *combo:m_toolbar->findChildren<QComboBox*>()) combo->hide();
-    for(QLineEdit *edit:m_toolbar->findChildren<QLineEdit*>()) edit->hide();
-
-    // 2) Continue/page-mode: compact C icon only. Existing nested menu remains intact.
+    // 3) Continue: one compact C icon only. Existing page-mode menu/functionality stays untouched.
     if(QToolButton *mode=m_toolbar->findChild<QToolButton*>("pageModeRailButton")){
         mode->setText("Continue");
         mode->setToolTip("Continue");
@@ -114,7 +112,11 @@ void TargetedRailFixController::applyFixes()
         mode->setFixedSize(32,32);
     }
 
-    // 3) PDF Search: icon only in the vertical rail. Clicking it opens the existing horizontal input dialog.
+    // Old mode combo remains hidden so no duplicate Continue/Facing text appears in the rail.
+    for(QComboBox *combo:m_toolbar->findChildren<QComboBox*>()) combo->hide();
+
+    // 4) PDF Search: compact icon in the vertical rail; clicking it uses the existing horizontal search dialog.
+    for(QLineEdit *edit:m_toolbar->findChildren<QLineEdit*>()) edit->hide();
     for(QAction *action:m_toolbar->actions()){
         if(!action) continue;
         const QString text=action->text().trimmed();
@@ -123,10 +125,11 @@ void TargetedRailFixController::applyFixes()
            text.compare("Find",Qt::CaseInsensitive)==0){
             action->setText("PDF Search");
             action->setIcon(searchIcon());
-            action->setToolTip("Search inside PDF");
+            action->setToolTip("PDF Search");
             if(auto *button=qobject_cast<QToolButton*>(m_toolbar->widgetForAction(action))){
                 button->setObjectName("targetPdfSearchButton");
                 button->setToolButtonStyle(Qt::ToolButtonIconOnly);
+                button->setIcon(searchIcon());
                 button->setIconSize(QSize(22,22));
                 button->setFixedSize(32,32);
                 button->setText(QString());

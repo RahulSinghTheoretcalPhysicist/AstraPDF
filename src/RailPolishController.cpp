@@ -187,15 +187,26 @@ void RailPolishController::polishRail()
         "QToolBar#readerToolbar QToolButton:pressed{background:rgba(19,48,58,220);}"
         "QToolBar#readerToolbar::separator{height:1px;background:transparent;margin:0;}"));
 
-    // Remove all unstable narrow-rail text controls. Keep zoom +/- actions only.
+    // Remove only the requested Page block and duplicate mode/search controls.
+    for(QSpinBox *w:m_toolbar->findChildren<QSpinBox*>()) w->hide();
     for(QComboBox *w:m_toolbar->findChildren<QComboBox*>()) w->hide();
     for(QLineEdit *w:m_toolbar->findChildren<QLineEdit*>()) w->hide();
-    for(QSpinBox *w:m_toolbar->findChildren<QSpinBox*>()) w->hide();
-    for(QLabel *w:m_toolbar->findChildren<QLabel*>()) w->hide();
+
+    for(QLabel *label:m_toolbar->findChildren<QLabel*>()){
+        const QString text=label->text().trimmed();
+        if(text.compare("Page",Qt::CaseInsensitive)==0 || text.startsWith('/')){
+            label->hide();
+        }else if(text.contains('%')){
+            label->setAlignment(Qt::AlignCenter);
+            label->setFixedSize(34,24);
+            label->setStyleSheet(QStringLiteral(
+                "QLabel{background:transparent;color:#dffcff;font-size:10px;font-weight:600;padding:0;margin:0;border:none;}"));
+            label->show();
+        }
+    }
 
     if(QToolButton *mode=m_toolbar->findChild<QToolButton*>("pageModeRailButton")) mode->hide();
     if(QToolButton *pageChip=m_toolbar->findChild<QToolButton*>("pageNumberChip")) pageChip->hide();
-    if(QToolButton *zoomChip=m_toolbar->findChild<QToolButton*>("zoomPercentChip")) zoomChip->hide();
     if(QWidget *strip=m_toolbar->findChild<QWidget*>("windowControlStrip")) strip->hide();
 
     QAction *minAction=nullptr;
@@ -206,7 +217,10 @@ void RailPolishController::polishRail()
         if(!action) continue;
         const QString text=action->text().trimmed();
         const QString lower=text.toLower();
-        if(lower.contains("search")) action->setVisible(false);
+        const bool requestedSearchControl=
+            lower=="search" || lower=="internet search" || lower=="pdf search" ||
+            lower=="find" || lower=="find next";
+        if(requestedSearchControl) action->setVisible(false);
         if(lower=="min" || lower=="minimize") minAction=action;
         else if(lower=="window") windowAction=action;
         else if(lower=="close") closeAction=action;
@@ -214,7 +228,7 @@ void RailPolishController::polishRail()
 
     for(QToolButton *button:m_toolbar->findChildren<QToolButton*>()){
         if(button->parentWidget() && button->parentWidget()->objectName()=="windowControlStrip") continue;
-        if(button->objectName()=="pageModeRailButton" || button->objectName()=="pageNumberChip" || button->objectName()=="zoomPercentChip") continue;
+        if(button->objectName()=="pageModeRailButton" || button->objectName()=="pageNumberChip") continue;
         button->setProperty("noExpand",true);
         button->setToolButtonStyle(Qt::ToolButtonIconOnly);
         button->setFixedSize(32,32);

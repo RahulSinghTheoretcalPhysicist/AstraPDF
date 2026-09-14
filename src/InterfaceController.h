@@ -26,11 +26,16 @@ private:
     void configureZoomEditor();
     void compactToolbarWidgets();
     void decorateToolButtons();
+    void configureWindowControls();
     void applyPanelStyle(QDockWidget *dock);
+    void showRail();
+    void hideRail();
+    void setButtonExpanded(QToolButton *button, bool expanded);
 
     MainWindow *m_window=nullptr;
     PdfCanvas *m_canvas=nullptr;
     QToolBar *m_toolbar=nullptr;
     QLineEdit *m_pdfSearch=nullptr;
     QLineEdit *m_zoomEditor=nullptr;
+    bool m_railVisible=false;
 };

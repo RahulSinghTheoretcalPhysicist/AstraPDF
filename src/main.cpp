@@ -5,7 +5,7 @@
 #include "UiEnhancer.h"
 #include "BackgroundController.h"
 #include "InterfaceController.h"
-#include "EdgeChromeController.h"
+#include "RailPolishController.h"
 
 int main(int argc, char *argv[])
 {
@@ -19,7 +19,7 @@ int main(int argc, char *argv[])
     UiEnhancer enhancer(&w,&w);
     BackgroundController backgrounds(&w,&w);
     InterfaceController interfaceController(&w,&w);
-    EdgeChromeController edgeChrome(&w,&w);
+    RailPolishController railPolish(&w,&w);
     w.show();
 
     if(argc>1)

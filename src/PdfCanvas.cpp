@@ -17,18 +17,28 @@ PdfCanvas::PdfCanvas(QWidget *parent):QWidget(parent)
 
 void PdfCanvas::setDocument(QPdfDocument *document)
 {
-    m_document=document; m_currentPage=0; m_selection.reset(); m_searchSelection.reset();
-    m_highlights.clear(); clearRenderCache(); rebuildLayout();
+    m_document=document;
+    m_currentPage=0;
+    m_fitToWidth=true;
+    m_zoom=1.0;
+    m_selection.reset();
+    m_searchSelection.reset();
+    m_highlights.clear();
+    clearRenderCache();
+    rebuildLayout();
 }
 
 void PdfCanvas::setViewportWidth(qreal width)
 {
-    m_viewportWidth=std::max<qreal>(width,320.0); rebuildLayout();
+    m_viewportWidth=std::max<qreal>(width,320.0);
+    rebuildLayout();
 }
 
 void PdfCanvas::setViewMode(ViewMode mode)
 {
-    if(m_mode==mode)return; m_mode=mode; rebuildLayout();
+    if(m_mode==mode)return;
+    m_mode=mode;
+    rebuildLayout();
 }
 
 void PdfCanvas::setCurrentPage(int page)
@@ -36,19 +46,56 @@ void PdfCanvas::setCurrentPage(int page)
     if(!m_document||m_document->pageCount()<=0)return;
     page=std::clamp(page,0,m_document->pageCount()-1);
     m_currentPage=page;
-    if(m_mode==ViewMode::SinglePage||m_mode==ViewMode::FacingPages) rebuildLayout();
+    if(m_mode==ViewMode::SinglePage||m_mode==ViewMode::FacingPages||m_fitToWidth) rebuildLayout();
     if(const auto *p=placementForPage(page)) emit requestEnsureVisible(p->rect);
     emit currentPageChanged(page);
+}
+
+qreal PdfCanvas::effectiveZoom() const
+{
+    if(!m_fitToWidth || !m_document || m_document->pageCount()<=0)
+        return m_zoom;
+
+    // A4 itself is 210 x 297 mm. ISO A4 does not define a page margin, so the
+    // reader uses a small, consistent visual gutter around the sheet instead.
+    // The actual PDF aspect ratio is preserved so text/figures are never stretched.
+    QSizeF page=m_document->pagePointSize(std::clamp(m_currentPage,0,m_document->pageCount()-1));
+    if(page.width()<=0.0 || page.height()<=0.0)
+        page=QSizeF(595.2756,841.8898); // A4 in PostScript points.
+
+    const qreal outerGutter=18.0;
+    const qreal usable=std::max<qreal>(260.0,m_viewportWidth-2.0*outerGutter);
+    return std::clamp<qreal>(usable/page.width(),0.20,5.00);
+}
+
+qreal PdfCanvas::zoom() const
+{
+    return effectiveZoom();
 }
 
 void PdfCanvas::setZoom(qreal zoom)
 {
     zoom=std::clamp<qreal>(zoom,0.20,5.00);
-    if(qFuzzyCompare(m_zoom,zoom))return;
-    m_zoom=zoom; clearRenderCache(); rebuildLayout();
+    m_fitToWidth=false;
+    if(qFuzzyCompare(m_zoom,zoom)){
+        rebuildLayout();
+        return;
+    }
+    m_zoom=zoom;
+    clearRenderCache();
+    rebuildLayout();
 }
-void PdfCanvas::zoomIn(){ setZoom(m_zoom*1.20); }
-void PdfCanvas::zoomOut(){ setZoom(m_zoom/1.20); }
+
+void PdfCanvas::fitToWidth()
+{
+    m_fitToWidth=true;
+    clearRenderCache();
+    rebuildLayout();
+    emit statusMessage("Fit Width: page fills the reading area while preserving the PDF aspect ratio.");
+}
+
+void PdfCanvas::zoomIn(){ setZoom(effectiveZoom()*1.15); }
+void PdfCanvas::zoomOut(){ setZoom(effectiveZoom()/1.15); }
 
 QVector<QSizeF> PdfCanvas::pageSizes() const
 {
@@ -58,30 +105,47 @@ QVector<QSizeF> PdfCanvas::pageSizes() const
     const int count=m_document->pageCount();
     if(count<=0)return s;
 
-    const QSizeF fallback(612.0,792.0);
+    // A4 fallback instead of US Letter, so unloaded/placeholder sheets keep the
+    // expected 210:297 paper proportion.
+    const QSizeF fallback(595.2756,841.8898);
     s.fill(fallback,count);
 
     if(m_mode==ViewMode::SinglePage){
-        s[m_currentPage]=m_document->pagePointSize(m_currentPage);
+        const QSizeF actual=m_document->pagePointSize(m_currentPage);
+        if(actual.isValid() && actual.width()>0 && actual.height()>0) s[m_currentPage]=actual;
         return s;
     }
 
     if(m_mode==ViewMode::FacingPages){
         int left=m_currentPage;
         if(left%2==1)--left;
-        s[left]=m_document->pagePointSize(left);
-        if(left+1<count)s[left+1]=m_document->pagePointSize(left+1);
+        const QSizeF leftActual=m_document->pagePointSize(left);
+        if(leftActual.isValid() && leftActual.width()>0 && leftActual.height()>0) s[left]=leftActual;
+        if(left+1<count){
+            const QSizeF rightActual=m_document->pagePointSize(left+1);
+            if(rightActual.isValid() && rightActual.width()>0 && rightActual.height()>0) s[left+1]=rightActual;
+        }
         return s;
     }
 
-    for(int i=0;i<count;++i)s[i]=m_document->pagePointSize(i);
+    for(int i=0;i<count;++i){
+        const QSizeF actual=m_document->pagePointSize(i);
+        if(actual.isValid() && actual.width()>0 && actual.height()>0) s[i]=actual;
+    }
     return s;
 }
 
 void PdfCanvas::rebuildLayout()
 {
-    if(!m_document||m_document->pageCount()<=0){ m_layout={}; resize(qMax(320,int(m_viewportWidth)),600); update(); return; }
-    m_layout=LayoutManager::calculate(pageSizes(),m_mode,m_currentPage,m_zoom,m_viewportWidth);
+    if(!m_document||m_document->pageCount()<=0){
+        m_layout={};
+        resize(qMax(320,int(m_viewportWidth)),600);
+        update();
+        return;
+    }
+
+    const qreal layoutZoom=effectiveZoom();
+    m_layout=LayoutManager::calculate(pageSizes(),m_mode,m_currentPage,layoutZoom,m_viewportWidth,18.0,18.0);
     resize(qMax(320,int(std::ceil(m_layout.canvasSize.width()))),
            qMax(600,int(std::ceil(m_layout.canvasSize.height()))));
     update();
@@ -100,8 +164,6 @@ QImage PdfCanvas::renderedPage(int page,QSize pixelSize)
     const QImage raw=m_document->render(page,pixelSize,QPdfDocumentRenderOptions{});
     if(raw.isNull())return {};
 
-    // QPdfDocument may render PDF page transparency. Composite the result on
-    // opaque white paper, matching normal PDF viewers such as Adobe Reader.
     QImage image(pixelSize,QImage::Format_ARGB32_Premultiplied);
     image.fill(Qt::white);
     {
@@ -151,14 +213,14 @@ void PdfCanvas::paintEvent(QPaintEvent *event)
     for(const auto& p:m_layout.pages){
         if(!p.rect.intersects(dirty))continue;
 
-        // Dark canvas around the page, but the PDF sheet itself is always white.
         painter.fillRect(p.rect.adjusted(-3,-3,3,3),QColor(20,22,26));
         painter.fillRect(p.rect,Qt::white);
 
         QSize px(qMax(1,int(std::round(p.rect.width()))),qMax(1,int(std::round(p.rect.height()))));
         QImage image=renderedPage(p.page,px);
         if(!image.isNull())painter.drawImage(p.rect,image);
-        painter.setPen(QColor(150,150,150)); painter.drawRect(p.rect);
+        painter.setPen(QColor(150,150,150));
+        painter.drawRect(p.rect);
 
         for(const auto& ann:m_highlights)if(ann.page==p.page){
             painter.save(); painter.setPen(Qt::NoPen); painter.setBrush(QColor(255,235,59,95));

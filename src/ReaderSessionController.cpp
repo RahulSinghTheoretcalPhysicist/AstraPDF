@@ -6,6 +6,7 @@
 #include <QApplication>
 #include <QCryptographicHash>
 #include <QDateTime>
+#include <QDirIterator>
 #include <QDockWidget>
 #include <QEvent>
 #include <QFileDialog>
@@ -13,6 +14,7 @@
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QLineEdit>
 #include <QListWidget>
 #include <QMenu>
 #include <QMenuBar>
@@ -20,6 +22,7 @@
 #include <QPdfDocument>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSet>
 #include <QSettings>
 #include <QStatusBar>
 #include <QStyle>
@@ -36,6 +39,7 @@ ReaderSessionController::ReaderSessionController(MainWindow *window, QObject *pa
     m_readerToolbar=m_window->findChild<QToolBar*>("readerToolbar");
 
     buildHistoryDock();
+    buildLibraryDock();
     setupOpenActionTracking();
 
     m_chromeTimer=new QTimer(this);
@@ -72,7 +76,10 @@ ReaderSessionController::ReaderSessionController(MainWindow *window, QObject *pa
         });
     }
 
+    connect(qApp,&QCoreApplication::aboutToQuit,this,[]{ QSettings().sync(); });
+
     refreshHistory();
+    refreshLibraryUi();
 }
 
 QString ReaderSessionController::normalizedPath(const QString& filePath) const
@@ -112,6 +119,8 @@ void ReaderSessionController::recordOpened(const QString& filePath)
     s.setValue("lastOpened",QDateTime::currentDateTime().toString(Qt::ISODate));
     s.endGroup();
     s.sync();
+
+    if(m_historyDock && m_historyDock->isVisible()) refreshHistory();
 }
 
 void ReaderSessionController::recordPage(int page)
@@ -123,14 +132,16 @@ void ReaderSessionController::recordPage(int page)
     s.setValue("page",std::max(0,page));
     s.setValue("lastOpened",QDateTime::currentDateTime().toString(Qt::ISODate));
     s.endGroup();
-    s.sync();
-    refreshHistory();
+
+    // Deliberately no sync() and no complete history rebuild here.
+    // QSettings will flush normally, and app shutdown explicitly syncs once.
 }
 
 void ReaderSessionController::refreshHistory()
 {
     if(!m_historyList) return;
     const QString selectedPath=m_historyList->currentItem() ? m_historyList->currentItem()->data(Qt::UserRole).toString() : QString();
+    m_historyList->setUpdatesEnabled(false);
     m_historyList->clear();
     QSettings s;
     const QStringList paths=s.value("history/paths").toStringList();
@@ -152,6 +163,7 @@ void ReaderSessionController::refreshHistory()
         item->setToolTip(path);
         if(path==selectedPath) m_historyList->setCurrentItem(item);
     }
+    m_historyList->setUpdatesEnabled(true);
 }
 
 void ReaderSessionController::buildHistoryDock()
@@ -170,7 +182,6 @@ void ReaderSessionController::buildHistoryDock()
     auto *hint=new QLabel("Permanent reading history: file, last page and last-used time.",panel);
     hint->setWordWrap(true);
     auto *hideButton=new QPushButton("Hide",panel);
-    hideButton->setToolTip("Hide history panel");
     topRow->addWidget(hint,1);
     topRow->addWidget(hideButton);
     layout->addLayout(topRow);
@@ -252,6 +263,181 @@ void ReaderSessionController::buildHistoryDock()
     });
 }
 
+void ReaderSessionController::buildLibraryDock()
+{
+    m_libraryDock=new QDockWidget("PDF Library",m_window);
+    m_libraryDock->setObjectName("libraryDock");
+    m_libraryDock->setAllowedAreas(Qt::LeftDockWidgetArea|Qt::RightDockWidgetArea);
+    m_libraryDock->setFeatures(QDockWidget::DockWidgetClosable|QDockWidget::DockWidgetMovable|QDockWidget::DockWidgetFloatable);
+
+    auto *panel=new QWidget(m_libraryDock);
+    auto *layout=new QVBoxLayout(panel);
+    layout->setContentsMargins(10,10,10,10);
+    layout->setSpacing(8);
+
+    auto *hint=new QLabel("Add folders once. AstraPDF keeps a cached PDF index so the library opens instantly next time.",panel);
+    hint->setWordWrap(true);
+    layout->addWidget(hint);
+
+    auto *folderRow=new QHBoxLayout;
+    auto *addFolder=new QPushButton("Add Folder",panel);
+    auto *removeFolder=new QPushButton("Remove",panel);
+    auto *rescan=new QPushButton("Rescan",panel);
+    folderRow->addWidget(addFolder);
+    folderRow->addWidget(removeFolder);
+    folderRow->addWidget(rescan);
+    layout->addLayout(folderRow);
+
+    m_libraryFoldersList=new QListWidget(panel);
+    m_libraryFoldersList->setMaximumHeight(110);
+    layout->addWidget(m_libraryFoldersList);
+
+    m_libraryFilter=new QLineEdit(panel);
+    m_libraryFilter->setPlaceholderText("Filter PDFs by filename...");
+    m_libraryFilter->setClearButtonEnabled(true);
+    layout->addWidget(m_libraryFilter);
+
+    m_libraryFilesList=new QListWidget(panel);
+    m_libraryFilesList->setAlternatingRowColors(true);
+    layout->addWidget(m_libraryFilesList,1);
+
+    auto *bottomRow=new QHBoxLayout;
+    auto *openSelected=new QPushButton("Open selected",panel);
+    auto *hide=new QPushButton("Hide",panel);
+    bottomRow->addWidget(openSelected,1);
+    bottomRow->addWidget(hide);
+    layout->addLayout(bottomRow);
+
+    m_libraryDock->setWidget(panel);
+    m_window->addDockWidget(Qt::LeftDockWidgetArea,m_libraryDock);
+    m_libraryDock->hide();
+
+    m_libraryAction=new QAction("PDF Library",this);
+    m_libraryAction->setShortcut(QKeySequence("Ctrl+Shift+L"));
+    connect(m_libraryAction,&QAction::triggered,this,[this]{
+        refreshLibraryUi();
+        m_libraryDock->show();
+        m_libraryDock->raise();
+        showReaderChrome();
+        if(m_chromeTimer) m_chromeTimer->stop();
+    });
+
+    if(m_readerToolbar) m_readerToolbar->addAction(m_libraryAction);
+    for(QMenu *menu:m_window->findChildren<QMenu*>()){
+        if(menu->title().contains("File",Qt::CaseInsensitive)){
+            menu->addAction(m_libraryAction);
+            break;
+        }
+    }
+
+    connect(addFolder,&QPushButton::clicked,this,&ReaderSessionController::addLibraryFolder);
+    connect(removeFolder,&QPushButton::clicked,this,&ReaderSessionController::removeSelectedLibraryFolder);
+    connect(rescan,&QPushButton::clicked,this,&ReaderSessionController::rebuildLibraryIndex);
+    connect(hide,&QPushButton::clicked,m_libraryDock,&QWidget::hide);
+    connect(m_libraryFilter,&QLineEdit::textChanged,this,[this]{ refreshLibraryUi(); });
+    connect(openSelected,&QPushButton::clicked,this,[this]{
+        if(m_libraryFilesList && m_libraryFilesList->currentItem())
+            openTracked(m_libraryFilesList->currentItem()->data(Qt::UserRole).toString());
+    });
+    connect(m_libraryFilesList,&QListWidget::itemDoubleClicked,this,[this](QListWidgetItem *item){
+        if(item) openTracked(item->data(Qt::UserRole).toString());
+    });
+}
+
+void ReaderSessionController::addLibraryFolder()
+{
+    const QString folder=QFileDialog::getExistingDirectory(m_window,"Add PDF Library Folder");
+    if(folder.isEmpty()) return;
+
+    QSettings s;
+    QStringList folders=s.value("library/folders").toStringList();
+    const QString normalized=QFileInfo(folder).absoluteFilePath();
+    bool exists=false;
+    for(const QString& f:folders){
+        if(QFileInfo(f).absoluteFilePath().compare(normalized,Qt::CaseInsensitive)==0){ exists=true; break; }
+    }
+    if(!exists){
+        folders<<normalized;
+        s.setValue("library/folders",folders);
+        s.sync();
+    }
+    rebuildLibraryIndex();
+}
+
+void ReaderSessionController::removeSelectedLibraryFolder()
+{
+    if(!m_libraryFoldersList || !m_libraryFoldersList->currentItem()) return;
+    const QString selected=m_libraryFoldersList->currentItem()->data(Qt::UserRole).toString();
+    QSettings s;
+    QStringList folders=s.value("library/folders").toStringList();
+    for(int i=folders.size()-1;i>=0;--i){
+        if(QFileInfo(folders.at(i)).absoluteFilePath().compare(selected,Qt::CaseInsensitive)==0) folders.removeAt(i);
+    }
+    s.setValue("library/folders",folders);
+    s.sync();
+    rebuildLibraryIndex();
+}
+
+void ReaderSessionController::rebuildLibraryIndex()
+{
+    QSettings s;
+    const QStringList folders=s.value("library/folders").toStringList();
+    QStringList files;
+    QSet<QString> seen;
+
+    if(m_window->statusBar()) m_window->statusBar()->showMessage("Scanning PDF library folders...");
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+
+    for(const QString& folder:folders){
+        QDirIterator it(folder,QStringList()<<"*.pdf"<<"*.PDF",QDir::Files,QDirIterator::Subdirectories);
+        while(it.hasNext()){
+            const QString path=QFileInfo(it.next()).absoluteFilePath();
+            const QString key=path.toLower();
+            if(seen.contains(key)) continue;
+            seen.insert(key);
+            files<<path;
+        }
+    }
+    files.sort(Qt::CaseInsensitive);
+    s.setValue("library/files",files);
+    s.setValue("library/indexedAt",QDateTime::currentDateTime().toString(Qt::ISODate));
+    s.sync();
+
+    QApplication::restoreOverrideCursor();
+    refreshLibraryUi();
+    if(m_window->statusBar())
+        m_window->statusBar()->showMessage(QStringLiteral("PDF library indexed: %1 files").arg(files.size()),3000);
+}
+
+void ReaderSessionController::refreshLibraryUi()
+{
+    if(!m_libraryFoldersList || !m_libraryFilesList) return;
+    QSettings s;
+    const QStringList folders=s.value("library/folders").toStringList();
+    const QStringList files=s.value("library/files").toStringList();
+    const QString filter=m_libraryFilter ? m_libraryFilter->text().trimmed() : QString();
+
+    m_libraryFoldersList->setUpdatesEnabled(false);
+    m_libraryFoldersList->clear();
+    for(const QString& folder:folders){
+        auto *item=new QListWidgetItem(folder,m_libraryFoldersList);
+        item->setData(Qt::UserRole,QFileInfo(folder).absoluteFilePath());
+        if(!QFileInfo::exists(folder)) item->setText(folder+"  [missing]");
+    }
+    m_libraryFoldersList->setUpdatesEnabled(true);
+
+    m_libraryFilesList->setUpdatesEnabled(false);
+    m_libraryFilesList->clear();
+    for(const QString& path:files){
+        const QFileInfo info(path);
+        if(!filter.isEmpty() && !info.fileName().contains(filter,Qt::CaseInsensitive)) continue;
+        auto *item=new QListWidgetItem(info.fileName(),m_libraryFilesList);
+        item->setData(Qt::UserRole,path);
+        item->setToolTip(path);
+    }
+    m_libraryFilesList->setUpdatesEnabled(true);
+}
+
 void ReaderSessionController::setupOpenActionTracking()
 {
     const auto actions=m_window->findChildren<QAction*>();
@@ -276,7 +462,6 @@ void ReaderSessionController::openTracked(const QString& filePath)
     m_currentPath=path;
     m_pendingRestorePage=savedPage(path);
     recordOpened(path);
-    refreshHistory();
     m_window->openPdf(path);
 }
 
@@ -320,7 +505,6 @@ void ReaderSessionController::hideReaderChrome()
     const auto docks=m_window->findChildren<QDockWidget*>();
     for(QDockWidget *dock:docks){
         if(dock->isVisible()){
-            // A side panel is active. Keep controls visible until the user hides/closes it.
             showReaderChrome();
             return;
         }

@@ -5,6 +5,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QSpinBox>
+#include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
 
@@ -13,7 +14,10 @@ TargetedRailFixController::TargetedRailFixController(MainWindow *window, QObject
 {
     if(!m_window) return;
     m_toolbar=m_window->findChild<QToolBar*>("readerToolbar");
+    if(!m_toolbar) return;
+
     applyFixes();
+    QTimer::singleShot(0,this,&TargetedRailFixController::applyFixes);
 }
 
 void TargetedRailFixController::applyFixes()
@@ -27,8 +31,9 @@ void TargetedRailFixController::applyFixes()
         if(text.compare("Page",Qt::CaseInsensitive)==0 || text.startsWith('/')){
             label->hide();
         }else if(text.contains('%')){
-            // Keep the existing zoom percentage visible.
+            // Explicitly preserve the zoom percentage display.
             label->setAlignment(Qt::AlignCenter);
+            label->setFixedSize(34,24);
             label->show();
         }
     }
@@ -41,9 +46,16 @@ void TargetedRailFixController::applyFixes()
     for(QLineEdit *edit:m_toolbar->findChildren<QLineEdit*>()){
         if(edit->placeholderText().contains("Search in PDF",Qt::CaseInsensitive)) edit->hide();
     }
+
     for(QAction *action:m_toolbar->actions()){
         if(!action) continue;
         const QString text=action->text().trimmed();
+
+        if(text=="100%"){
+            action->setVisible(true);
+            continue;
+        }
+
         if(text.compare("PDF Search",Qt::CaseInsensitive)==0 ||
            text.compare("Find Next",Qt::CaseInsensitive)==0 ||
            text.compare("Find",Qt::CaseInsensitive)==0 ||
@@ -53,7 +65,8 @@ void TargetedRailFixController::applyFixes()
         }
     }
 
-    // Do not alter zoom buttons, 100%, history, library, dictionary, or any other rail item.
+    // Do not alter zoom +/- buttons, history, library, dictionary, window controls,
+    // or any other rail item.
     m_toolbar->updateGeometry();
     m_toolbar->update();
 }

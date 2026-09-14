@@ -236,7 +236,12 @@ void RailPolishController::polishRail()
         };
         updatePageChip();
         connect(pageSpin,qOverload<int>(&QSpinBox::valueChanged),pageChip,[updatePageChip](int){ updatePageChip(); });
-        if(pageTotal) connect(pageTotal,&QLabel::textChanged,pageChip,[updatePageChip](const QString&){ updatePageChip(); });
+        if(pageTotal){
+            auto *pageTimer=new QTimer(pageChip);
+            pageTimer->setInterval(250);
+            connect(pageTimer,&QTimer::timeout,pageChip,[updatePageChip]{ updatePageChip(); });
+            pageTimer->start();
+        }
 
         QAction *before=nullptr;
         for(QAction *a:m_toolbar->actions()){
@@ -255,7 +260,12 @@ void RailPolishController::polishRail()
         zoomChip->setFixedSize(34,24);
         zoomChip->setText(zoomLabel->text().trimmed());
         zoomChip->setStyleSheet("QToolButton{min-width:34px;max-width:34px;min-height:24px;max-height:24px;padding:0;border:none;background:transparent;color:#dffcff;font-size:10px;font-weight:600;}QToolButton:hover{background:rgba(31,70,83,175);border-radius:6px;}");
-        connect(zoomLabel,&QLabel::textChanged,zoomChip,[zoomChip](const QString& text){ zoomChip->setText(text.trimmed()); });
+        auto *zoomTimer=new QTimer(zoomChip);
+        zoomTimer->setInterval(250);
+        connect(zoomTimer,&QTimer::timeout,zoomChip,[zoomChip,zoomLabel]{
+            zoomChip->setText(zoomLabel->text().trimmed());
+        });
+        zoomTimer->start();
 
         QAction *before=nullptr;
         for(QAction *a:m_toolbar->actions()){

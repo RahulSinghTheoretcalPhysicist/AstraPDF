@@ -33,6 +33,7 @@ private:
     void refreshHistory();
     void recordOpened(const QString& filePath);
     void recordPage(int page);
+    void flushPendingHistoryPage();
     int savedPage(const QString& filePath) const;
     QString historyKey(const QString& filePath) const;
     QString normalizedPath(const QString& filePath) const;
@@ -56,6 +57,7 @@ private:
     QDockWidget *m_historyDock=nullptr;
     QListWidget *m_historyList=nullptr;
     QAction *m_historyAction=nullptr;
+    QTimer *m_historySaveTimer=nullptr;
 
     QDockWidget *m_libraryDock=nullptr;
     QListWidget *m_libraryFoldersList=nullptr;
@@ -67,6 +69,8 @@ private:
     QTimer *m_chromeTimer=nullptr;
 
     QString m_currentPath;
+    QString m_pendingHistoryPath;
+    int m_pendingHistoryPage=-1;
     int m_pendingRestorePage=-1;
     bool m_readerFullScreen=false;
     bool m_restoringPage=false;

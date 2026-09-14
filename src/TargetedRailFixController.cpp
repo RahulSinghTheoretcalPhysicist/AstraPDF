@@ -24,35 +24,47 @@ void TargetedRailFixController::applyFixes()
 {
     if(!m_toolbar) return;
 
-    // Remove only the Page block shown in the screenshot.
+    // Exact screenshot cleanup only:
+    // 1) remove Page label + page spinbox + /total
+    // 2) remove Continue/page-mode rectangle
+    // 3) remove Search rectangles
+    // Keep zoom +/-, the visible zoom percentage label, and all other rail items.
+
     for(QSpinBox *spin:m_toolbar->findChildren<QSpinBox*>()) spin->hide();
+
     for(QLabel *label:m_toolbar->findChildren<QLabel*>()){
         const QString text=label->text().trimmed();
         if(text.compare("Page",Qt::CaseInsensitive)==0 || text.startsWith('/')){
             label->hide();
-        }else if(text.contains('%')){
-            // Explicitly preserve the zoom percentage display.
+            continue;
+        }
+
+        if(text.contains('%')){
             label->setAlignment(Qt::AlignCenter);
             label->setFixedSize(34,24);
             label->show();
         }
     }
-    if(QToolButton *pageChip=m_toolbar->findChild<QToolButton*>("pageNumberChip")) pageChip->hide();
 
-    // Remove only the Continue rectangle.
-    if(QToolButton *mode=m_toolbar->findChild<QToolButton*>("pageModeRailButton")) mode->hide();
+    if(QToolButton *pageChip=m_toolbar->findChild<QToolButton*>("pageNumberChip"))
+        pageChip->hide();
 
-    // Remove only the search controls from the rail.
+    if(QToolButton *mode=m_toolbar->findChild<QToolButton*>("pageModeRailButton"))
+        mode->hide();
+
     for(QLineEdit *edit:m_toolbar->findChildren<QLineEdit*>()){
-        if(edit->placeholderText().contains("Search in PDF",Qt::CaseInsensitive)) edit->hide();
+        if(edit->placeholderText().contains("Search in PDF",Qt::CaseInsensitive))
+            edit->hide();
     }
 
     for(QAction *action:m_toolbar->actions()){
         if(!action) continue;
         const QString text=action->text().trimmed();
 
+        // The rail already has a dedicated QLabel showing the zoom percentage.
+        // Keep the old QAction hidden so it cannot create a second blank/rectangular 100% button.
         if(text=="100%"){
-            action->setVisible(true);
+            action->setVisible(false);
             continue;
         }
 
@@ -65,8 +77,6 @@ void TargetedRailFixController::applyFixes()
         }
     }
 
-    // Do not alter zoom +/- buttons, history, library, dictionary, window controls,
-    // or any other rail item.
     m_toolbar->updateGeometry();
     m_toolbar->update();
 }

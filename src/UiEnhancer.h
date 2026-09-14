@@ -6,6 +6,7 @@
 #include <QJsonObject>
 
 class MainWindow;
+class PdfCanvas;
 class QDockWidget;
 class QLineEdit;
 class QComboBox;
@@ -21,11 +22,14 @@ public:
 private:
     void decorateDock(QDockWidget *dock);
     void setupSearch();
+    void setupNeonBackground();
+    void applyNeonBackground(const QString& colorName, bool persist=true);
     void runSearch();
     void runDuckDuckGo(const QString& query);
     void runWikipedia(const QString& query);
 
     MainWindow *m_window=nullptr;
+    PdfCanvas *m_canvas=nullptr;
     QNetworkAccessManager *m_network=nullptr;
     QDockWidget *m_webDock=nullptr;
     QLineEdit *m_webInput=nullptr;

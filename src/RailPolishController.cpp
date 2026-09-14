@@ -19,6 +19,7 @@
 #include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
+#include <QWidget>
 
 namespace {
 QPixmap canvas()
@@ -55,19 +56,12 @@ QIcon cleanIcon(const QString& key)
         p.drawLine(QPointF(a,24),QPointF(b,24));
         p.drawLine(QPointF(b,24),QPointF(right?29:19,16));
         p.drawLine(QPointF(b,24),QPointF(right?29:19,32));
-    }else if(key=="zoomin" || key=="zoomout" || key=="pdfsearch" || key=="websearch"){
+    }else if(key=="zoomin" || key=="zoomout"){
         p.drawEllipse(QRectF(9,8,22,22));
         p.drawLine(QPointF(29,29),QPointF(39,39));
-        if(key=="zoomin" || key=="zoomout"){
-            p.setPen(QPen(soft,2.0,Qt::SolidLine,Qt::RoundCap));
-            p.drawLine(QPointF(15,19),QPointF(25,19));
-            if(key=="zoomin") p.drawLine(QPointF(20,14),QPointF(20,24));
-        }else if(key=="websearch"){
-            p.setPen(QPen(pink,1.35,Qt::SolidLine,Qt::RoundCap));
-            p.drawEllipse(QRectF(13,12,14,14));
-            p.drawLine(QPointF(20,12),QPointF(20,26));
-            p.drawLine(QPointF(13,19),QPointF(27,19));
-        }
+        p.setPen(QPen(soft,2.0,Qt::SolidLine,Qt::RoundCap));
+        p.drawLine(QPointF(15,19),QPointF(25,19));
+        if(key=="zoomin") p.drawLine(QPointF(20,14),QPointF(20,24));
     }else if(key=="history"){
         p.setPen(QPen(cyan,1.8,Qt::SolidLine,Qt::RoundCap,Qt::RoundJoin));
         p.setBrush(QColor(25,79,107));
@@ -88,13 +82,6 @@ QIcon cleanIcon(const QString& key)
         p.setPen(QPen(yellow,1.7));
         p.drawLine(QPointF(15,18),QPointF(21,18));
         p.drawLine(QPointF(27,18),QPointF(33,18));
-    }else if(key=="continue"){
-        QFont f(QStringLiteral("Segoe UI"));
-        f.setPointSize(18);
-        f.setBold(true);
-        p.setFont(f);
-        p.setPen(cyan);
-        p.drawText(pix.rect(),Qt::AlignCenter,QStringLiteral("C"));
     }else if(key=="view"){
         p.setPen(QPen(cyan,2.0,Qt::SolidLine,Qt::RoundCap,Qt::RoundJoin));
         p.setBrush(QColor(72,46,96));
@@ -119,10 +106,19 @@ QIcon cleanIcon(const QString& key)
         p.setPen(QPen(soft,2.0,Qt::SolidLine,Qt::RoundCap));
         p.drawLine(QPointF(24,21),QPointF(24,31));
         p.drawPoint(QPointF(24,16));
+    }else if(key=="minimize"){
+        p.setPen(QPen(cyan,2.4,Qt::SolidLine,Qt::RoundCap));
+        p.drawLine(QPointF(13,29),QPointF(35,29));
+    }else if(key=="maximize"){
+        p.setPen(QPen(cyan,2.2,Qt::SolidLine,Qt::RoundCap,Qt::RoundJoin));
+        p.drawRoundedRect(QRectF(13,13,22,22),2,2);
+    }else if(key=="close"){
+        p.setPen(QPen(QColor("#ff718f"),2.6,Qt::SolidLine,Qt::RoundCap));
+        p.drawLine(QPointF(14,14),QPointF(34,34));
+        p.drawLine(QPointF(34,14),QPointF(14,34));
     }else{
         QFont f(QStringLiteral("Segoe UI Symbol"));
         f.setPointSize(15);
-        f.setBold(false);
         p.setFont(f);
         p.setPen(soft);
         p.drawText(pix.rect(),Qt::AlignCenter,QStringLiteral("•"));
@@ -138,14 +134,11 @@ QString keyForButton(QToolButton *button)
     const QString s=t.toLower();
     if(button->objectName()=="fileRailButton") return "file";
     if(button->objectName()=="viewRailButton") return "view";
-    if(button->objectName()=="pageModeRailButton") return "continue";
     if(s.contains("open")) return "open";
     if(s.contains("previous")) return "previous";
     if(s=="next" || s.contains("next page")) return "next";
     if(s.contains("zoom in")) return "zoomin";
     if(s.contains("zoom out")) return "zoomout";
-    if(s.contains("pdf search") || s=="find") return "pdfsearch";
-    if(s.contains("internet search") || s=="search") return "websearch";
     if(s.contains("history")) return "history";
     if(s.contains("library")) return "library";
     if(s.contains("dictionary")) return "dictionary";
@@ -194,118 +187,76 @@ void RailPolishController::polishRail()
         "QToolBar#readerToolbar QToolButton:pressed{background:rgba(19,48,58,220);}"
         "QToolBar#readerToolbar::separator{height:1px;background:transparent;margin:0;}"));
 
-    QSpinBox *pageSpin=nullptr;
-    QLabel *pageTotal=nullptr;
-    QLabel *zoomLabel=nullptr;
-
+    // Remove all unstable narrow-rail text controls. Keep zoom +/- actions only.
     for(QComboBox *w:m_toolbar->findChildren<QComboBox*>()) w->hide();
     for(QLineEdit *w:m_toolbar->findChildren<QLineEdit*>()) w->hide();
-    for(QSpinBox *w:m_toolbar->findChildren<QSpinBox*>()){
-        pageSpin=w;
-        w->hide();
-    }
-    for(QLabel *w:m_toolbar->findChildren<QLabel*>()){
-        const QString text=w->text().trimmed();
-        if(text.startsWith('/')) pageTotal=w;
-        if(text.contains('%')) zoomLabel=w;
-        w->hide();
-    }
+    for(QSpinBox *w:m_toolbar->findChildren<QSpinBox*>()) w->hide();
+    for(QLabel *w:m_toolbar->findChildren<QLabel*>()) w->hide();
 
-    QToolButton *pageModeButton=m_toolbar->findChild<QToolButton*>("pageModeRailButton");
-    if(pageModeButton){
-        pageModeButton->setText("Continue");
-        pageModeButton->setToolTip("Continue");
-        pageModeButton->setIcon(cleanIcon("continue"));
-    }
+    if(QToolButton *mode=m_toolbar->findChild<QToolButton*>("pageModeRailButton")) mode->hide();
+    if(QToolButton *pageChip=m_toolbar->findChild<QToolButton*>("pageNumberChip")) pageChip->hide();
+    if(QToolButton *zoomChip=m_toolbar->findChild<QToolButton*>("zoomPercentChip")) zoomChip->hide();
+    if(QWidget *strip=m_toolbar->findChild<QWidget*>("windowControlStrip")) strip->hide();
 
-    QToolButton *pageChip=m_toolbar->findChild<QToolButton*>("pageNumberChip");
-    if(!pageChip && pageSpin){
-        pageChip=new QToolButton(m_toolbar);
-        pageChip->setObjectName("pageNumberChip");
-        pageChip->setProperty("noExpand",true);
-        pageChip->setToolButtonStyle(Qt::ToolButtonTextOnly);
-        pageChip->setToolTip("Page number");
-        pageChip->setFixedSize(34,26);
-        pageChip->setStyleSheet("QToolButton{min-width:34px;max-width:34px;min-height:26px;max-height:26px;padding:0;border:1px solid rgba(120,235,245,90);border-radius:6px;background:rgba(8,18,25,165);color:#eaffff;font-size:10px;font-weight:600;}QToolButton:hover{border-color:#84f5ff;background:rgba(20,50,62,220);}");
+    QAction *minAction=nullptr;
+    QAction *windowAction=nullptr;
+    QAction *closeAction=nullptr;
 
-        auto updatePageChip=[pageChip,pageSpin,pageTotal]{
-            QString total=pageTotal?pageTotal->text().trimmed():QString();
-            if(total.startsWith('/')) total=total.mid(1).trimmed();
-            if(total.isEmpty()) total="0";
-            pageChip->setText(QStringLiteral("%1/%2").arg(pageSpin->value()).arg(total));
-        };
-        updatePageChip();
-        connect(pageSpin,qOverload<int>(&QSpinBox::valueChanged),pageChip,[updatePageChip](int){ updatePageChip(); });
-        if(pageTotal){
-            auto *pageTimer=new QTimer(pageChip);
-            pageTimer->setInterval(250);
-            connect(pageTimer,&QTimer::timeout,pageChip,[updatePageChip]{ updatePageChip(); });
-            pageTimer->start();
-        }
-
-        QAction *before=nullptr;
-        for(QAction *a:m_toolbar->actions()){
-            if(a && a->text().compare("Zoom Out",Qt::CaseInsensitive)==0){ before=a; break; }
-        }
-        m_toolbar->insertWidget(before,pageChip);
-    }
-
-    QToolButton *zoomChip=m_toolbar->findChild<QToolButton*>("zoomPercentChip");
-    if(!zoomChip && zoomLabel){
-        zoomChip=new QToolButton(m_toolbar);
-        zoomChip->setObjectName("zoomPercentChip");
-        zoomChip->setProperty("noExpand",true);
-        zoomChip->setToolButtonStyle(Qt::ToolButtonTextOnly);
-        zoomChip->setToolTip("Zoom");
-        zoomChip->setFixedSize(34,24);
-        zoomChip->setText(zoomLabel->text().trimmed());
-        zoomChip->setStyleSheet("QToolButton{min-width:34px;max-width:34px;min-height:24px;max-height:24px;padding:0;border:none;background:transparent;color:#dffcff;font-size:10px;font-weight:600;}QToolButton:hover{background:rgba(31,70,83,175);border-radius:6px;}");
-        auto *zoomTimer=new QTimer(zoomChip);
-        zoomTimer->setInterval(250);
-        connect(zoomTimer,&QTimer::timeout,zoomChip,[zoomChip,zoomLabel]{
-            zoomChip->setText(zoomLabel->text().trimmed());
-        });
-        zoomTimer->start();
-
-        QAction *before=nullptr;
-        for(QAction *a:m_toolbar->actions()){
-            if(pageModeButton && m_toolbar->widgetForAction(a)==pageModeButton){ before=a; break; }
-        }
-        m_toolbar->insertWidget(before,zoomChip);
+    for(QAction *action:m_toolbar->actions()){
+        if(!action) continue;
+        const QString text=action->text().trimmed();
+        const QString lower=text.toLower();
+        if(lower.contains("search")) action->setVisible(false);
+        if(lower=="min" || lower=="minimize") minAction=action;
+        else if(lower=="window") windowAction=action;
+        else if(lower=="close") closeAction=action;
     }
 
     for(QToolButton *button:m_toolbar->findChildren<QToolButton*>()){
         if(button->parentWidget() && button->parentWidget()->objectName()=="windowControlStrip") continue;
-        if(button->objectName()=="pageNumberChip" || button->objectName()=="zoomPercentChip") continue;
+        if(button->objectName()=="pageModeRailButton" || button->objectName()=="pageNumberChip" || button->objectName()=="zoomPercentChip") continue;
         button->setProperty("noExpand",true);
         button->setToolButtonStyle(Qt::ToolButtonIconOnly);
         button->setFixedSize(32,32);
         button->setIconSize(QSize(22,22));
         const QString key=keyForButton(button);
         if(!key.isEmpty()) button->setIcon(cleanIcon(key));
-        if(key=="pdfsearch"){
-            button->setText("PDF Search");
-            button->setToolTip("PDF Search");
-        }
         button->installEventFilter(this);
     }
+
+    auto addWindowButton=[this](const QString& objectName,const QString& key,const QString& tip,QAction *action){
+        if(!action || m_toolbar->findChild<QToolButton*>(objectName)) return;
+        auto *button=new QToolButton(m_toolbar);
+        button->setObjectName(objectName);
+        button->setProperty("noExpand",true);
+        button->setToolButtonStyle(Qt::ToolButtonIconOnly);
+        button->setIcon(cleanIcon(key));
+        button->setIconSize(QSize(22,22));
+        button->setFixedSize(32,32);
+        button->setToolTip(tip);
+        button->setStyleSheet("QToolButton{border:none;background:transparent;padding:0;border-radius:8px;}QToolButton:hover{background:rgba(31,70,83,175);}");
+        connect(button,&QToolButton::clicked,action,&QAction::trigger);
+        button->installEventFilter(this);
+        m_toolbar->addWidget(button);
+    };
+
+    addWindowButton("railMinimizeButton","minimize","Minimize",minAction);
+    addWindowButton("railMaximizeButton","maximize","Maximize / Restore",windowAction);
+    addWindowButton("railCloseButton","close","Close",closeAction);
 }
 
 QString RailPolishController::buttonLabel(QToolButton *button) const
 {
     if(!button) return {};
-    QString label=button->text().trimmed();
+    QString label=button->toolTip().trimmed();
+    if(label.isEmpty()) label=button->text().trimmed();
     if(label.isEmpty() && button->defaultAction()) label=button->defaultAction()->text().trimmed();
-    if(label.isEmpty()) label=button->toolTip().trimmed();
-    if(label=="Find Next" || label=="Find") label="PDF Search";
-    if(label=="Search") label="Internet Search";
     return label;
 }
 
 void RailPolishController::setHovered(QToolButton *button, bool hovered)
 {
-    if(!button || (button->parentWidget() && button->parentWidget()->objectName()=="windowControlStrip")) return;
-    if(button->objectName()=="pageNumberChip" || button->objectName()=="zoomPercentChip") return;
+    if(!button) return;
     button->setIconSize(hovered?QSize(28,28):QSize(22,22));
 }
 
@@ -363,17 +314,15 @@ void RailPolishController::syncRailVisibility()
 bool RailPolishController::eventFilter(QObject *watched, QEvent *event)
 {
     if(auto *button=qobject_cast<QToolButton*>(watched)){
-        if(!(button->parentWidget() && button->parentWidget()->objectName()=="windowControlStrip")){
-            if(event->type()==QEvent::Enter){
-                if(m_hoveredButton && m_hoveredButton!=button) setHovered(m_hoveredButton,false);
-                m_hoveredButton=button;
-                setHovered(button,true);
-                showHoverLabel(button);
-            }else if(event->type()==QEvent::Leave){
-                setHovered(button,false);
-                if(m_hoveredButton==button) m_hoveredButton=nullptr;
-                hideHoverLabel();
-            }
+        if(event->type()==QEvent::Enter){
+            if(m_hoveredButton && m_hoveredButton!=button) setHovered(m_hoveredButton,false);
+            m_hoveredButton=button;
+            setHovered(button,true);
+            showHoverLabel(button);
+        }else if(event->type()==QEvent::Leave){
+            setHovered(button,false);
+            if(m_hoveredButton==button) m_hoveredButton=nullptr;
+            hideHoverLabel();
         }
     }
 

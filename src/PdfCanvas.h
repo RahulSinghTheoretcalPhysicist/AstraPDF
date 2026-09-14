@@ -26,7 +26,9 @@ public:
     void setCurrentPage(int page);
     int currentPage() const { return m_currentPage; }
     void setZoom(qreal zoom);
-    qreal zoom() const { return m_zoom; }
+    qreal zoom() const;
+    void fitToWidth();
+    bool isFitToWidth() const { return m_fitToWidth; }
     void zoomIn();
     void zoomOut();
     bool findNext(const QString& text);
@@ -50,6 +52,7 @@ private:
     struct Hit { bool valid=false; int page=-1; QPointF pagePoint; PagePlacement placement; };
     void rebuildLayout();
     QVector<QSizeF> pageSizes() const;
+    qreal effectiveZoom() const;
     Hit hitTest(const QPointF& canvasPoint) const;
     QPointF canvasToPage(const QPointF&, const PagePlacement&) const;
     QPointF pageToCanvas(const QPointF&, const PagePlacement&) const;
@@ -63,6 +66,7 @@ private:
     int m_currentPage=0;
     qreal m_zoom=1.0;
     qreal m_viewportWidth=1000.0;
+    bool m_fitToWidth=true;
     LayoutResult m_layout;
     QMap<QString,QImage> m_cache;
 

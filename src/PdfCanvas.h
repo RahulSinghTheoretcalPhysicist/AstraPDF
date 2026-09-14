@@ -1,4 +1,5 @@
 #pragma once
+#include <QColor>
 #include <QImage>
 #include <QMap>
 #include <QPolygonF>
@@ -35,6 +36,8 @@ public:
     bool copySelection();
     bool addHighlightFromSelection();
     void clearRenderCache();
+    void setNeonBackground(const QColor& color);
+    QColor neonBackgroundColor() const { return m_neonColor; }
 
 signals:
     void currentPageChanged(int page);
@@ -69,6 +72,8 @@ private:
     bool m_fitToWidth=true;
     LayoutResult m_layout;
     QMap<QString,QImage> m_cache;
+    QColor m_neonColor=QColor("#00e5ff");
+    QColor m_backgroundColor=QColor(5,18,22);
 
     bool m_dragging=false;
     int m_selectionPage=-1;

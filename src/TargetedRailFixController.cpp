@@ -2,12 +2,12 @@
 #include "MainWindow.h"
 
 #include <QAction>
+#include <QComboBox>
 #include <QLabel>
 #include <QLineEdit>
 #include <QSpinBox>
 #include <QTimer>
 #include <QToolBar>
-#include <QToolButton>
 #include <QWidget>
 
 TargetedRailFixController::TargetedRailFixController(MainWindow *window, QObject *parent)
@@ -25,59 +25,50 @@ void TargetedRailFixController::applyFixes()
 {
     if(!m_toolbar) return;
 
-    auto removeToolbarWidget=[this](QWidget *widget){
+    // Remove a widget from the toolbar layout only.
+    // Do NOT delete it: MainWindow and InterfaceController still use the backing
+    // objects for page tracking, page-mode changes and PDF searching.
+    auto detachToolbarWidget=[this](QWidget *widget){
         if(!widget) return;
         const auto actions=m_toolbar->actions();
         for(QAction *action:actions){
             if(m_toolbar->widgetForAction(action)==widget){
                 m_toolbar->removeAction(action);
-                action->deleteLater();
-                break;
+                widget->hide();
+                return;
             }
         }
-        widget->deleteLater();
+        widget->hide();
     };
 
-    // Page UI: remove the entire Page / number / total group from the rail.
-    const auto spins=m_toolbar->findChildren<QSpinBox*>();
-    for(QSpinBox *spin:spins)
-        removeToolbarWidget(spin);
+    // 1) Remove only the visible Page block: "Page" + number box + "/ total".
+    for(QSpinBox *spin:m_toolbar->findChildren<QSpinBox*>())
+        detachToolbarWidget(spin);
 
-    const auto labels=m_toolbar->findChildren<QLabel*>();
-    for(QLabel *label:labels){
+    for(QLabel *label:m_toolbar->findChildren<QLabel*>()){
         const QString text=label->text().trimmed();
         if(text.compare("Page",Qt::CaseInsensitive)==0 || text.startsWith('/'))
-            removeToolbarWidget(label);
+            detachToolbarWidget(label);
     }
 
-    if(QToolButton *pageChip=m_toolbar->findChild<QToolButton*>("pageNumberChip"))
-        removeToolbarWidget(pageChip);
-
-    // Page-mode/Continue control: do not keep a rail widget for it.
-    if(QToolButton *mode=m_toolbar->findChild<QToolButton*>("pageModeRailButton"))
-        removeToolbarWidget(mode);
-
-    // PDF search edit box: remove the widget from the rail.
-    const auto edits=m_toolbar->findChildren<QLineEdit*>();
-    for(QLineEdit *edit:edits){
-        if(edit->placeholderText().contains("Search in PDF",Qt::CaseInsensitive))
-            removeToolbarWidget(edit);
-    }
-
-    // Remove only search-related rail actions. Other actions remain untouched.
-    const auto actions=m_toolbar->actions();
-    for(QAction *action:actions){
-        if(!action) continue;
-        const QString text=action->text().trimmed();
-        if(text.compare("PDF Search",Qt::CaseInsensitive)==0 ||
-           text.compare("Find Next",Qt::CaseInsensitive)==0 ||
-           text.compare("Find",Qt::CaseInsensitive)==0 ||
-           text.compare("Search",Qt::CaseInsensitive)==0 ||
-           text.compare("Internet Search",Qt::CaseInsensitive)==0){
-            m_toolbar->removeAction(action);
+    // 2) Remove only the original rectangular Continuous/Facing combo widget.
+    // Keep pageModeRailButton and its Single/Double/Continuous/Facing menu intact.
+    for(QComboBox *combo:m_toolbar->findChildren<QComboBox*>()){
+        if(combo->count()>=4 &&
+           combo->itemText(0).contains("Single Page",Qt::CaseInsensitive) &&
+           combo->itemText(1).contains("Continuous",Qt::CaseInsensitive)){
+            detachToolbarWidget(combo);
         }
     }
 
+    // 3) Remove only the original rectangular "Search in PDF..." edit widget.
+    // Keep PDF Search / Internet Search actions and their functionality intact.
+    for(QLineEdit *edit:m_toolbar->findChildren<QLineEdit*>()){
+        if(edit->placeholderText().contains("Search in PDF",Qt::CaseInsensitive))
+            detachToolbarWidget(edit);
+    }
+
+    // Nothing else is hidden, deleted, disconnected or removed.
     m_toolbar->updateGeometry();
     m_toolbar->update();
 }

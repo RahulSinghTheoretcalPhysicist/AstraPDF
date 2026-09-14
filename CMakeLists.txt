@@ -20,6 +20,7 @@ qt_add_executable(AstraPDF WIN32
     src/BackgroundController.h src/BackgroundController.cpp
     src/InterfaceController.h src/InterfaceController.cpp
     src/RailPolishController.h src/RailPolishController.cpp
+    src/TargetedRailFixController.h src/TargetedRailFixController.cpp
 )
 
 target_link_libraries(AstraPDF PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Pdf Qt6::Network)

@@ -6,6 +6,7 @@
 #include "BackgroundController.h"
 #include "InterfaceController.h"
 #include "RailPolishController.h"
+#include "TargetedRailFixController.h"
 
 int main(int argc, char *argv[])
 {
@@ -20,6 +21,12 @@ int main(int argc, char *argv[])
     BackgroundController backgrounds(&w,&w);
     InterfaceController interfaceController(&w,&w);
     RailPolishController railPolish(&w,&w);
+    TargetedRailFixController targetedRailFix(&w,&w);
+
+    // RailPolish owns cursor-driven rail visibility. Prevent the older fullscreen
+    // chrome event filter from repeatedly showing the toolbar on every mouse move.
+    qApp->removeEventFilter(&sessions);
+
     w.show();
 
     if(argc>1)

@@ -4,6 +4,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDateTime>
 #include <QDirIterator>
@@ -47,6 +48,11 @@ ReaderSessionController::ReaderSessionController(MainWindow *window, QObject *pa
     m_chromeTimer->setInterval(3000);
     connect(m_chromeTimer,&QTimer::timeout,this,&ReaderSessionController::hideReaderChrome);
 
+    m_historySaveTimer=new QTimer(this);
+    m_historySaveTimer->setSingleShot(true);
+    m_historySaveTimer->setInterval(350);
+    connect(m_historySaveTimer,&QTimer::timeout,this,&ReaderSessionController::flushPendingHistoryPage);
+
     if(m_canvas){
         m_canvas->setMouseTracking(true);
         connect(m_canvas,&PdfCanvas::currentPageChanged,this,[this](int page){
@@ -66,17 +72,22 @@ ReaderSessionController::ReaderSessionController(MainWindow *window, QObject *pa
             if(status!=QPdfDocument::Status::Ready || !m_canvas || m_currentPath.isEmpty()) return;
             const int count=m_document->pageCount();
             if(count<=0) return;
+
             const int page=std::clamp(m_pendingRestorePage,0,count-1);
             m_restoringPage=true;
             m_canvas->setCurrentPage(page);
             m_restoringPage=false;
             recordPage(page);
+            flushPendingHistoryPage();
             m_pendingRestorePage=-1;
             setReaderFullScreen(true);
         });
     }
 
-    connect(qApp,&QCoreApplication::aboutToQuit,this,[]{ QSettings().sync(); });
+    connect(qApp,&QCoreApplication::aboutToQuit,this,[this]{
+        flushPendingHistoryPage();
+        QSettings().sync();
+    });
 
     refreshHistory();
     refreshLibraryUi();
@@ -84,12 +95,15 @@ ReaderSessionController::ReaderSessionController(MainWindow *window, QObject *pa
 
 QString ReaderSessionController::normalizedPath(const QString& filePath) const
 {
-    return QFileInfo(filePath).absoluteFilePath();
+    QFileInfo info(filePath);
+    QString path=info.exists() ? info.canonicalFilePath() : info.absoluteFilePath();
+    if(path.isEmpty()) path=info.absoluteFilePath();
+    return QDir::cleanPath(path);
 }
 
 QString ReaderSessionController::historyKey(const QString& filePath) const
 {
-    const QByteArray data=normalizedPath(filePath).toLower().toUtf8();
+    const QByteArray data=normalizedPath(filePath).toCaseFolded().toUtf8();
     return QString::fromLatin1(QCryptographicHash::hash(data,QCryptographicHash::Sha1).toHex());
 }
 
@@ -108,7 +122,7 @@ void ReaderSessionController::recordOpened(const QString& filePath)
     QSettings s;
     QStringList paths=s.value("history/paths").toStringList();
     for(int i=paths.size()-1;i>=0;--i){
-        if(QFileInfo(paths.at(i)).absoluteFilePath().compare(path,Qt::CaseInsensitive)==0) paths.removeAt(i);
+        if(normalizedPath(paths.at(i)).compare(path,Qt::CaseInsensitive)==0) paths.removeAt(i);
     }
     paths.prepend(path);
     s.setValue("history/paths",paths);
@@ -116,7 +130,7 @@ void ReaderSessionController::recordOpened(const QString& filePath)
     s.beginGroup(QStringLiteral("history/items/%1").arg(historyKey(path)));
     s.setValue("path",path);
     if(!s.contains("page")) s.setValue("page",0);
-    s.setValue("lastOpened",QDateTime::currentDateTime().toString(Qt::ISODate));
+    s.setValue("lastOpened",QDateTime::currentDateTime().toString(Qt::ISODateWithMs));
     s.endGroup();
     s.sync();
 
@@ -126,33 +140,62 @@ void ReaderSessionController::recordOpened(const QString& filePath)
 void ReaderSessionController::recordPage(int page)
 {
     if(m_currentPath.isEmpty()) return;
-    QSettings s;
-    s.beginGroup(QStringLiteral("history/items/%1").arg(historyKey(m_currentPath)));
-    s.setValue("path",m_currentPath);
-    s.setValue("page",std::max(0,page));
-    s.setValue("lastOpened",QDateTime::currentDateTime().toString(Qt::ISODate));
-    s.endGroup();
+    m_pendingHistoryPath=m_currentPath;
+    m_pendingHistoryPage=std::max(0,page);
+    if(m_historySaveTimer) m_historySaveTimer->start();
 
-    // Deliberately no sync() and no complete history rebuild here.
-    // QSettings will flush normally, and app shutdown explicitly syncs once.
+    if(m_historyDock && m_historyDock->isVisible()){
+        for(int i=0;i<m_historyList->count();++i){
+            auto *item=m_historyList->item(i);
+            if(item->data(Qt::UserRole).toString().compare(m_currentPath,Qt::CaseInsensitive)==0){
+                const QFileInfo info(m_currentPath);
+                item->setText(QStringLiteral("%1\nPage %2  •  now")
+                              .arg(info.fileName().isEmpty()?m_currentPath:info.fileName())
+                              .arg(m_pendingHistoryPage+1));
+                break;
+            }
+        }
+    }
+}
+
+void ReaderSessionController::flushPendingHistoryPage()
+{
+    if(m_pendingHistoryPath.isEmpty() || m_pendingHistoryPage<0) return;
+
+    QSettings s;
+    s.beginGroup(QStringLiteral("history/items/%1").arg(historyKey(m_pendingHistoryPath)));
+    s.setValue("path",m_pendingHistoryPath);
+    s.setValue("page",m_pendingHistoryPage);
+    s.setValue("lastOpened",QDateTime::currentDateTime().toString(Qt::ISODateWithMs));
+    s.endGroup();
+    s.sync();
+
+    m_pendingHistoryPath.clear();
+    m_pendingHistoryPage=-1;
 }
 
 void ReaderSessionController::refreshHistory()
 {
     if(!m_historyList) return;
-    const QString selectedPath=m_historyList->currentItem() ? m_historyList->currentItem()->data(Qt::UserRole).toString() : QString();
+    flushPendingHistoryPage();
+
+    const QString selectedPath=m_historyList->currentItem()
+        ? m_historyList->currentItem()->data(Qt::UserRole).toString() : QString();
+
     m_historyList->setUpdatesEnabled(false);
     m_historyList->clear();
+
     QSettings s;
     const QStringList paths=s.value("history/paths").toStringList();
-    for(const QString& path:paths){
+    for(const QString& rawPath:paths){
+        const QString path=normalizedPath(rawPath);
         s.beginGroup(QStringLiteral("history/items/%1").arg(historyKey(path)));
         const int page=s.value("page",0).toInt();
         const QString opened=s.value("lastOpened").toString();
         s.endGroup();
 
         const QFileInfo info(path);
-        const QDateTime dt=QDateTime::fromString(opened,Qt::ISODate);
+        const QDateTime dt=QDateTime::fromString(opened,Qt::ISODateWithMs);
         const QString when=dt.isValid() ? dt.toString("yyyy-MM-dd HH:mm") : QStringLiteral("unknown time");
         const QString missing=info.exists()?QString():QStringLiteral("  [missing]");
         auto *item=new QListWidgetItem(QStringLiteral("%1\nPage %2  •  %3%4")
@@ -161,7 +204,7 @@ void ReaderSessionController::refreshHistory()
                                        .arg(when,missing),m_historyList);
         item->setData(Qt::UserRole,path);
         item->setToolTip(path);
-        if(path==selectedPath) m_historyList->setCurrentItem(item);
+        if(path.compare(selectedPath,Qt::CaseInsensitive)==0) m_historyList->setCurrentItem(item);
     }
     m_historyList->setUpdatesEnabled(true);
 }
@@ -179,7 +222,7 @@ void ReaderSessionController::buildHistoryDock()
     layout->setSpacing(8);
 
     auto *topRow=new QHBoxLayout;
-    auto *hint=new QLabel("Permanent reading history: file, last page and last-used time.",panel);
+    auto *hint=new QLabel("Permanent history: every PDF keeps its last page and last-opened time.",panel);
     hint->setWordWrap(true);
     auto *hideButton=new QPushButton("Hide",panel);
     topRow->addWidget(hint,1);
@@ -192,7 +235,7 @@ void ReaderSessionController::buildHistoryDock()
     layout->addWidget(m_historyList,1);
 
     auto *buttonRow=new QHBoxLayout;
-    auto *openButton=new QPushButton("Open selected",panel);
+    auto *openButton=new QPushButton("Resume selected",panel);
     auto *refreshButton=new QPushButton("Refresh",panel);
     buttonRow->addWidget(openButton,1);
     buttonRow->addWidget(refreshButton);
@@ -253,11 +296,11 @@ void ReaderSessionController::buildHistoryDock()
         }
     }
 
-    auto openSelected=[this]{
+    auto resumeSelected=[this]{
         if(!m_historyList || !m_historyList->currentItem()) return;
         openTracked(m_historyList->currentItem()->data(Qt::UserRole).toString());
     };
-    connect(openButton,&QPushButton::clicked,this,openSelected);
+    connect(openButton,&QPushButton::clicked,this,resumeSelected);
     connect(m_historyList,&QListWidget::itemDoubleClicked,this,[this](QListWidgetItem *item){
         if(item) openTracked(item->data(Qt::UserRole).toString());
     });
@@ -275,7 +318,7 @@ void ReaderSessionController::buildLibraryDock()
     layout->setContentsMargins(10,10,10,10);
     layout->setSpacing(8);
 
-    auto *hint=new QLabel("Add folders once. AstraPDF keeps a cached PDF index so the library opens instantly next time.",panel);
+    auto *hint=new QLabel("Add folders once. AstraPDF keeps a cached PDF index so the library opens quickly next time.",panel);
     hint->setWordWrap(true);
     layout->addWidget(hint);
 
@@ -351,10 +394,10 @@ void ReaderSessionController::addLibraryFolder()
 
     QSettings s;
     QStringList folders=s.value("library/folders").toStringList();
-    const QString normalized=QFileInfo(folder).absoluteFilePath();
+    const QString normalized=normalizedPath(folder);
     bool exists=false;
     for(const QString& f:folders){
-        if(QFileInfo(f).absoluteFilePath().compare(normalized,Qt::CaseInsensitive)==0){ exists=true; break; }
+        if(normalizedPath(f).compare(normalized,Qt::CaseInsensitive)==0){ exists=true; break; }
     }
     if(!exists){
         folders<<normalized;
@@ -371,7 +414,7 @@ void ReaderSessionController::removeSelectedLibraryFolder()
     QSettings s;
     QStringList folders=s.value("library/folders").toStringList();
     for(int i=folders.size()-1;i>=0;--i){
-        if(QFileInfo(folders.at(i)).absoluteFilePath().compare(selected,Qt::CaseInsensitive)==0) folders.removeAt(i);
+        if(normalizedPath(folders.at(i)).compare(selected,Qt::CaseInsensitive)==0) folders.removeAt(i);
     }
     s.setValue("library/folders",folders);
     s.sync();
@@ -391,8 +434,8 @@ void ReaderSessionController::rebuildLibraryIndex()
     for(const QString& folder:folders){
         QDirIterator it(folder,QStringList()<<"*.pdf"<<"*.PDF",QDir::Files,QDirIterator::Subdirectories);
         while(it.hasNext()){
-            const QString path=QFileInfo(it.next()).absoluteFilePath();
-            const QString key=path.toLower();
+            const QString path=normalizedPath(it.next());
+            const QString key=path.toCaseFolded();
             if(seen.contains(key)) continue;
             seen.insert(key);
             files<<path;
@@ -400,7 +443,7 @@ void ReaderSessionController::rebuildLibraryIndex()
     }
     files.sort(Qt::CaseInsensitive);
     s.setValue("library/files",files);
-    s.setValue("library/indexedAt",QDateTime::currentDateTime().toString(Qt::ISODate));
+    s.setValue("library/indexedAt",QDateTime::currentDateTime().toString(Qt::ISODateWithMs));
     s.sync();
 
     QApplication::restoreOverrideCursor();
@@ -421,7 +464,7 @@ void ReaderSessionController::refreshLibraryUi()
     m_libraryFoldersList->clear();
     for(const QString& folder:folders){
         auto *item=new QListWidgetItem(folder,m_libraryFoldersList);
-        item->setData(Qt::UserRole,QFileInfo(folder).absoluteFilePath());
+        item->setData(Qt::UserRole,normalizedPath(folder));
         if(!QFileInfo::exists(folder)) item->setText(folder+"  [missing]");
     }
     m_libraryFoldersList->setUpdatesEnabled(true);
@@ -454,11 +497,14 @@ void ReaderSessionController::setupOpenActionTracking()
 
 void ReaderSessionController::openTracked(const QString& filePath)
 {
+    flushPendingHistoryPage();
+
     const QString path=normalizedPath(filePath);
     if(!QFileInfo::exists(path)){
         QMessageBox::warning(m_window,"Open PDF",QStringLiteral("File not found:\n%1").arg(path));
         return;
     }
+
     m_currentPath=path;
     m_pendingRestorePage=savedPage(path);
     recordOpened(path);

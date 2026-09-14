@@ -181,18 +181,19 @@ void RailPolishController::polishRail()
 {
     if(!m_toolbar) return;
 
+    // Intentionally narrow: the rail should feel like an edge strip, not a sidebar.
     m_toolbar->setToolButtonStyle(Qt::ToolButtonIconOnly);
-    m_toolbar->setIconSize(QSize(18,18));
-    m_toolbar->setFixedWidth(46);
+    m_toolbar->setIconSize(QSize(22,22));
+    m_toolbar->setFixedWidth(40);
     m_toolbar->setStyleSheet(QStringLiteral(
-        "QToolBar#readerToolbar{background:rgba(7,13,19,220);border:none;"
-        "border-right:1px solid rgba(105,235,245,95);padding:7px 3px;spacing:2px;}"
-        "QToolBar#readerToolbar QToolButton{min-width:38px;max-width:38px;"
-        "min-height:34px;max-height:34px;margin:0;padding:0;border:none;"
-        "border-radius:9px;background:transparent;}"
+        "QToolBar#readerToolbar{background:rgba(7,13,19,224);border:none;"
+        "border-right:1px solid rgba(105,235,245,90);padding:5px 3px;spacing:1px;}"
+        "QToolBar#readerToolbar QToolButton{min-width:32px;max-width:32px;"
+        "min-height:32px;max-height:32px;margin:0;padding:0;border:none;"
+        "border-radius:8px;background:transparent;}"
         "QToolBar#readerToolbar QToolButton:hover{background:rgba(31,70,83,175);}"
         "QToolBar#readerToolbar QToolButton:pressed{background:rgba(19,48,58,220);}"
-        "QToolBar#readerToolbar::separator{height:2px;background:transparent;margin:0;}"));
+        "QToolBar#readerToolbar::separator{height:1px;background:transparent;margin:0;}"));
 
     for(QComboBox *w:m_toolbar->findChildren<QComboBox*>()) w->hide();
     for(QLineEdit *w:m_toolbar->findChildren<QLineEdit*>()) w->hide();
@@ -203,8 +204,8 @@ void RailPolishController::polishRail()
         if(button->parentWidget() && button->parentWidget()->objectName()=="windowControlStrip") continue;
         button->setProperty("noExpand",true);
         button->setToolButtonStyle(Qt::ToolButtonIconOnly);
-        button->setFixedSize(38,34);
-        button->setIconSize(QSize(18,18));
+        button->setFixedSize(32,32);
+        button->setIconSize(QSize(22,22));
         const QString key=keyForButton(button);
         if(!key.isEmpty()) button->setIcon(cleanIcon(key));
         button->installEventFilter(this);
@@ -225,7 +226,7 @@ QString RailPolishController::buttonLabel(QToolButton *button) const
 void RailPolishController::setHovered(QToolButton *button, bool hovered)
 {
     if(!button || (button->parentWidget() && button->parentWidget()->objectName()=="windowControlStrip")) return;
-    button->setIconSize(hovered?QSize(26,26):QSize(18,18));
+    button->setIconSize(hovered?QSize(28,28):QSize(22,22));
 }
 
 void RailPolishController::showHoverLabel(QToolButton *button)
@@ -236,7 +237,7 @@ void RailPolishController::showHoverLabel(QToolButton *button)
 
     m_hoverLabel->setText(label);
     m_hoverLabel->adjustSize();
-    const QPoint anchor=button->mapTo(m_window,QPoint(button->width()+8,(button->height()-m_hoverLabel->height())/2));
+    const QPoint anchor=button->mapTo(m_window,QPoint(button->width()+7,(button->height()-m_hoverLabel->height())/2));
     m_hoverLabel->move(anchor);
     m_hoverLabel->raise();
     m_hoverLabel->show();
@@ -252,18 +253,19 @@ void RailPolishController::syncRailVisibility()
     if(!m_window || !m_toolbar) return;
     if(m_window->menuBar()) m_window->menuBar()->hide();
 
-    m_toolbar->setFixedWidth(46);
-    m_toolbar->setFixedHeight(qMax(300,m_window->height()-12));
-    m_toolbar->move(2,6);
+    // Keep the strip perfectly aligned to the physical left edge.
+    m_toolbar->setFixedWidth(40);
+    m_toolbar->setFixedHeight(qMax(300,m_window->height()-8));
+    m_toolbar->move(0,4);
 
     const QPoint global=QCursor::pos();
     const QPoint local=m_window->mapFromGlobal(global);
     const bool insideWindow=m_window->rect().contains(local);
-    const bool edge=insideWindow && local.x()>=0 && local.x()<=6;
+    const bool edge=insideWindow && local.x()>=0 && local.x()<=5;
 
     const QPoint railTopLeft=m_toolbar->mapToGlobal(QPoint(0,0));
     const QRect railRect(railTopLeft,m_toolbar->size());
-    const bool overRail=m_toolbar->isVisible() && railRect.adjusted(-2,-2,4,2).contains(global);
+    const bool overRail=m_toolbar->isVisible() && railRect.adjusted(0,-2,4,2).contains(global);
     const bool popupOpen=QApplication::activePopupWidget()!=nullptr;
 
     if(edge || overRail || popupOpen){

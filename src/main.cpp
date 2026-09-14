@@ -4,6 +4,7 @@
 #include "ReaderSessionController.h"
 #include "UiEnhancer.h"
 #include "BackgroundController.h"
+#include "InterfaceController.h"
 
 int main(int argc, char *argv[])
 {
@@ -16,6 +17,7 @@ int main(int argc, char *argv[])
     ReaderSessionController sessions(&w,&w);
     UiEnhancer enhancer(&w,&w);
     BackgroundController backgrounds(&w,&w);
+    InterfaceController interfaceController(&w,&w);
     w.show();
 
     if(argc>1)

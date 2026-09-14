@@ -56,12 +56,9 @@ qreal PdfCanvas::effectiveZoom() const
     if(!m_fitToWidth || !m_document || m_document->pageCount()<=0)
         return m_zoom;
 
-    // A4 itself is 210 x 297 mm. ISO A4 does not define a page margin, so the
-    // reader uses a small, consistent visual gutter around the sheet instead.
-    // The actual PDF aspect ratio is preserved so text/figures are never stretched.
     QSizeF page=m_document->pagePointSize(std::clamp(m_currentPage,0,m_document->pageCount()-1));
     if(page.width()<=0.0 || page.height()<=0.0)
-        page=QSizeF(595.2756,841.8898); // A4 in PostScript points.
+        page=QSizeF(595.2756,841.8898);
 
     const qreal outerGutter=18.0;
     const qreal usable=std::max<qreal>(260.0,m_viewportWidth-2.0*outerGutter);
@@ -94,6 +91,16 @@ void PdfCanvas::fitToWidth()
     emit statusMessage("Fit Width: page fills the reading area while preserving the PDF aspect ratio.");
 }
 
+void PdfCanvas::setNeonBackground(const QColor& color)
+{
+    if(!color.isValid()) return;
+    m_neonColor=color;
+    int hue=color.hsvHue();
+    if(hue<0) hue=190;
+    m_backgroundColor=QColor::fromHsv(hue,150,24);
+    update();
+}
+
 void PdfCanvas::zoomIn(){ setZoom(effectiveZoom()*1.15); }
 void PdfCanvas::zoomOut(){ setZoom(effectiveZoom()/1.15); }
 
@@ -105,8 +112,6 @@ QVector<QSizeF> PdfCanvas::pageSizes() const
     const int count=m_document->pageCount();
     if(count<=0)return s;
 
-    // A4 fallback instead of US Letter, so unloaded/placeholder sheets keep the
-    // expected 210:297 paper proportion.
     const QSizeF fallback(595.2756,841.8898);
     s.fill(fallback,count);
 
@@ -207,19 +212,27 @@ PdfCanvas::Hit PdfCanvas::hitTest(const QPointF& pt) const
 void PdfCanvas::paintEvent(QPaintEvent *event)
 {
     QPainter painter(this);
-    painter.fillRect(rect(),QColor(46,48,51));
+    painter.fillRect(rect(),m_backgroundColor);
     const QRectF dirty=event->rect();
 
     for(const auto& p:m_layout.pages){
-        if(!p.rect.intersects(dirty))continue;
+        if(!p.rect.adjusted(-12,-12,12,12).intersects(dirty))continue;
 
-        painter.fillRect(p.rect.adjusted(-3,-3,3,3),QColor(20,22,26));
+        QColor glow=m_neonColor;
+        glow.setAlpha(22);
+        painter.fillRect(p.rect.adjusted(-12,-12,12,12),glow);
+        glow.setAlpha(38);
+        painter.fillRect(p.rect.adjusted(-7,-7,7,7),glow);
+        glow.setAlpha(70);
+        painter.fillRect(p.rect.adjusted(-3,-3,3,3),glow);
         painter.fillRect(p.rect,Qt::white);
 
         QSize px(qMax(1,int(std::round(p.rect.width()))),qMax(1,int(std::round(p.rect.height()))));
         QImage image=renderedPage(p.page,px);
         if(!image.isNull())painter.drawImage(p.rect,image);
-        painter.setPen(QColor(150,150,150));
+        QColor border=m_neonColor;
+        border.setAlpha(155);
+        painter.setPen(border);
         painter.drawRect(p.rect);
 
         for(const auto& ann:m_highlights)if(ann.page==p.page){
